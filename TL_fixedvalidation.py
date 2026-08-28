@@ -13,8 +13,8 @@ parser.add_argument(
 parser.add_argument(
     '--input_size',
     dest='input_size',
-    help='Image size',
-    default=299,
+    help='Image size; default 256 matches the published Teuho et al. reference-CNN polar-map representation',
+    default=256,
     type=int
 )
 parser.add_argument(
