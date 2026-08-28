@@ -4,6 +4,7 @@
 # Uses: TL_fixedvalidation.py
 # Modify the 'models' array below to select which models to train
 # Adjust the counter limit (line 39) to change number of runs per model
+# Use 256×256 to match the published Teuho et al. reference-CNN polar-map input size.
 
 echo "Running Experiments..."
 
@@ -45,7 +46,7 @@ do
     until [ $counter -gt 80 ]
     do
         echo $counter
-        python TL_fixedvalidation.py --model_name $model --input_size 128 --batch_size 10 --epochs 100 --partial_epochs 100 --partial_epochs_2 100 --freeze_fe --early_stopping --optimizer Adam --class_weights --tag $counter
+        python TL_fixedvalidation.py --model_name $model --input_size 256 --batch_size 10 --epochs 100 --partial_epochs 100 --partial_epochs_2 100 --freeze_fe --early_stopping --optimizer Adam --class_weights --tag $counter
         ((counter++))
     done
     echo "-------------------------------------------------------------------------------------"
