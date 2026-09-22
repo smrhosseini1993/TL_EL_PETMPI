@@ -1,0 +1,23 @@
+# Python cache and local environments
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Patient data, secure manifests, local outputs, and trained models must never be committed.
+data/training/*.jpg
+data/training/ica_lables.txt
+data/test/*.jpg
+data/test/ica_lables.txt
+secure_data/
+secure_outputs/
+outputs/
+results/
+reports/
+log/
+*.keras
+*.h5
+
+# Only the non-sensitive manifest template belongs in Git.
+configs/fixed_split_manifest.csv
+configs/selected_protocol.json

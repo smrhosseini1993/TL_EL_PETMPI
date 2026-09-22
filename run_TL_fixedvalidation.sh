@@ -1,55 +1,35 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# R1 locked historic 61/31/46 TL benchmark.
+# It can begin only after the full CV run has created selected_protocol.json.
+set -euo pipefail
 
-# Transfer Learning with Validation Split (2:1 train/val)
-# Uses: TL_fixedvalidation.py
-# Modify the 'models' array below to select which models to train
-# Adjust the counter limit (line 39) to change number of runs per model
-# Use 256×256 to match the published Teuho et al. reference-CNN polar-map input size.
+PROJECT_ROOT="${PROJECT_ROOT:?Set PROJECT_ROOT to the secure directory containing images}"
+SPLIT_MANIFEST="${SPLIT_MANIFEST:?Set SPLIT_MANIFEST to the verified secure 61/31/46 CSV}"
+CV_OUTPUT_ROOT="${CV_OUTPUT_ROOT:?Set CV_OUTPUT_ROOT to the complete CV output directory}"
+OUTPUT_ROOT="${OUTPUT_ROOT:?Set OUTPUT_ROOT to secure final-output storage}"
+PYTHON_BIN="${PYTHON_BIN:-python}"
+PROTOCOL_FILE="${CV_OUTPUT_ROOT}/selected_protocol.json"
+MODELS="VGG16,VGG19,ResNet50,ResNet101,ResNet152,InceptionV3,InceptionResNetV2,DenseNet169,DenseNet201,MobileNetV2,Xception"
 
-echo "Running Experiments..."
+# Step 1: five-seed technical preflight for every architecture (55 fits).
+# It does not select an architecture or a seed. Inspect expected patient-level files,
+# phase parameter counts, logs, and any GPU-memory failures before production.
+"${PYTHON_BIN}" TL_fixedvalidation.py \
+  --root "${PROJECT_ROOT}" \
+  --split-manifest "${SPLIT_MANIFEST}" \
+  --protocol-file "${PROTOCOL_FILE}" \
+  --output-dir "${OUTPUT_ROOT}/fixed_preflight_seeds_001_005" \
+  --models "${MODELS}" \
+  --seeds 1-5 \
+  --preflight
 
-# All available models from your code
-# models=(
-#     "DenseNet201"
-#     "DenseNet169"
-#     "ResNet50"
-#     "ResNet101"
-#     "ResNet152"
-#     "InceptionV3"
-#     "InceptionResNetV2"
-#     "VGG16"
-#     "VGG19"
-#     "Xception"
-#     "EfficientNetB0"
-#     "EfficientNetB1"
-#     "EfficientNetB2"
-#     "EfficientNetB3"
-#     "EfficientNetB4"
-#     "EfficientNetB5"
-#     "EfficientNetB6"
-#     "EfficientNetB7"
-#     "NASNetLarge"
-#     "NASNetMobile"
-#     "MobileNetV2"
-#     "EfficientNetV2B0"
-#     "EfficientNetV2B1"
-#     "EfficientNetV2B2"
-# )
-
-# Choose the models you want to run
-models=("VGG19")
-
-for model in "${models[@]}"
-do
-    echo "###################################################################################################################"
-    counter=1
-    until [ $counter -gt 80 ]
-    do
-        echo $counter
-        python TL_fixedvalidation.py --model_name $model --input_size 256 --batch_size 10 --epochs 100 --partial_epochs 100 --partial_epochs_2 100 --freeze_fe --early_stopping --optimizer Adam --class_weights --tag $counter
-        ((counter++))
-    done
-    echo "-------------------------------------------------------------------------------------"
-done
-
-read -p "Press any key to continue..."
+# Step 2: after the entire 55-fit preflight is accepted technically, run seeds 6–100.
+# This produces 11 × 95 = 1,045 remaining fits. It must use the same locked protocol
+# and locked split manifest; do not alter settings based on preflight performance.
+# "${PYTHON_BIN}" TL_fixedvalidation.py \
+#   --root "${PROJECT_ROOT}" \
+#   --split-manifest "${SPLIT_MANIFEST}" \
+#   --protocol-file "${PROTOCOL_FILE}" \
+#   --output-dir "${OUTPUT_ROOT}/fixed_production_seeds_006_100" \
+#   --models "${MODELS}" \
+#   --seeds 6-100

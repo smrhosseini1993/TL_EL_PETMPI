@@ -1,0 +1,53 @@
+{
+  "study": "EJPH-D-26-00179 R1 transfer-learning reanalysis",
+  "status": "predeclared before revised test evaluation",
+  "input": {
+    "size": 256,
+    "channels": 3,
+    "format": "RGB JPEG",
+    "augmentation": "none"
+  },
+  "models": [
+    "VGG16",
+    "VGG19",
+    "ResNet50",
+    "ResNet101",
+    "ResNet152",
+    "InceptionV3",
+    "InceptionResNetV2",
+    "DenseNet169",
+    "DenseNet201",
+    "MobileNetV2",
+    "Xception"
+  ],
+  "fixed_training": {
+    "optimizer": "Adam",
+    "loss": "binary_crossentropy",
+    "class_weights": false,
+    "batch_size": 5,
+    "threshold": 0.5,
+    "early_stopping_monitor": "val_binary_accuracy",
+    "early_stopping_patience": 4,
+    "restore_best_weights": true,
+    "phase1_epochs": 30,
+    "phase2_epochs": 30,
+    "phase3_epochs": 30
+  },
+  "development_search": {
+    "cohort": "92-patient development cohort only",
+    "folds": 5,
+    "splitter": "StratifiedKFold(shuffle=True, random_state=42)",
+    "training_seed": 43,
+    "head_learning_rates": [0.00003, 0.0001, 0.0003],
+    "fine_tune_learning_rates": [0.000001, 0.000003, 0.00001],
+    "dropout_rates": [0.3, 0.5, 0.6],
+    "selection_metric": "mean pooled out-of-fold AUC across the 11 architectures",
+    "tie_rule": "lower fine-tune learning rate; then lower head learning rate; then dropout closest to 0.50",
+    "test_data_access": false
+  },
+  "final_runs": {
+    "split": "locked historic 61/31/46 manifest",
+    "seeds": "1-100",
+    "role_of_runs": "descriptive stability only; no best-seed selection or run-level inferential testing"
+  }
+}

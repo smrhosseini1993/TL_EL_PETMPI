@@ -1,0 +1,4 @@
+patient_id,relative_path,split,observed_label
+EXAMPLE_0001,data/training/EXAMPLE_0001.jpg,train,0
+EXAMPLE_0062,data/training/EXAMPLE_0062.jpg,validation,1
+EXAMPLE_0093,data/test/EXAMPLE_0093.jpg,test,0
