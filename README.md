@@ -14,6 +14,7 @@ The current `r1/tl-reanalysis` branch implements the TL portion of the revised e
 | `tl_reanalysis_core.py` | Shared architecture registry, official Keras preprocessing registry, retained legacy classifier head, three-phase fine-tuning functions, reproducibility utilities, and output schema. |
 | `configs/r1_tl_protocol_grid.json` | Version-controlled declaration of the fixed protocol and 3 × 3 × 3 development-only grid. |
 | `configs/fixed_split_manifest_TEMPLATE.csv` | Non-sensitive schema for the secure locked 61/31/46 split manifest. Do not place real IDs or labels in Git. |
+| `scripts/create_verified_historic_manifest.py` | Creates one secure manifest from the audited legacy alphabetical ordering and refuses any mismatch from the historic 61/31/46 class counts. |
 | `scripts/validate_tl_setup.py` | Fast no-GPU validator for secure data counts, labels, and (optionally) the locked split manifest. |
 | `run_TL_crossvalidation.sh` | CV technical-preflight and full-search launcher template. |
 | `run_TL_fixedvalidation.sh` | 5-seed technical-preflight and remaining 95-seed production launcher template. |
@@ -57,6 +58,14 @@ patient_id,relative_path,split,observed_label
 ```
 
 Its exact shape is shown in `configs/fixed_split_manifest_TEMPLATE.csv`. Keep the actual manifest out of Git. Use `scripts/validate_tl_setup.py` to validate the secure data and manifest before GPU fitting.
+
+After confirming the old split rule and boundary filenames, create the secure manifest outside the repository, for example in a `secure_config` directory beside the clone:
+
+```bash
+python scripts/create_verified_historic_manifest.py \
+  --root "${PROJECT_ROOT}" \
+  --output /secure/path/secure_config/locked_historic_61_31_46.csv
+```
 
 ## R1 usage
 
