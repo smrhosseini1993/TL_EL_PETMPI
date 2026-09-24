@@ -156,6 +156,36 @@ def _canonical_json(payload: Mapping[str, Any]) -> str:
     return json.dumps(payload, sort_keys=True, separators=(",", ":"), default=_json_default)
 
 
+def _batch_identity(manifest: Mapping[str, Any]) -> str:
+    """Return the immutable scientific identity of one final-run batch.
+
+    Local path spelling is deliberately excluded. A dry check may use a relative path
+    while a later tmux launcher uses the same secure file via its absolute path; SHA-256
+    fingerprints already prove the file identity. Runtime metadata is also descriptive
+    and must not block a legitimate resume.
+    """
+    identity_fields = (
+        "batch_name",
+        "purpose",
+        "preflight",
+        "models",
+        "seeds",
+        "protocol",
+        "split_manifest_sha256",
+        "protocol_file_sha256",
+        "selection_provenance_sha256",
+        "split_counts",
+        "split_class_counts",
+        "test_data_accessed",
+        "selection_performed",
+        "best_seed_selection_performed",
+    )
+    missing = [field for field in identity_fields if field not in manifest]
+    if missing:
+        raise ValueError(f"Batch manifest is missing immutable identity fields: {missing}")
+    return _canonical_json({field: manifest[field] for field in identity_fields})
+
+
 def _json_default(value: Any) -> Any:
     if isinstance(value, Path):
         return str(value)
@@ -180,12 +210,19 @@ def initialise_results_store(
         with connection:
             connection.execute("INSERT INTO metadata(key, value) VALUES (?, ?)", ("study_signature", signature_json))
     elif existing["value"] != signature_json:
-        raise RuntimeError(
-            "This results database belongs to a different code/protocol/split signature. "
-            "Use a new results directory; never mix final-run outputs."
-        )
+        started_run_count = connection.execute("SELECT COUNT(*) AS n FROM run_status").fetchone()["n"]
+        if started_run_count:
+            raise RuntimeError(
+                "This results database belongs to a different code/protocol/split signature after runs began. "
+                "Use a new results directory; never mix final-run outputs."
+            )
+        # A dry run has no model/seed record. Permit a pre-run code-only safety patch
+        # (for example, an output-resume fix) to replace its signature before fitting.
+        with connection:
+            connection.execute("UPDATE metadata SET value = ? WHERE key = 'study_signature'", (signature_json,))
 
     manifest_json = _canonical_json(batch_manifest)
+    current_identity = _batch_identity(batch_manifest)
     existing_batch = connection.execute("SELECT manifest_json FROM batches WHERE batch_name = ?", (batch_name,)).fetchone()
     if existing_batch is None:
         with connection:
@@ -193,11 +230,24 @@ def initialise_results_store(
                 "INSERT INTO batches(batch_name, manifest_json, created_at) VALUES (?, ?, ?)",
                 (batch_name, manifest_json, utc_now()),
             )
-    elif existing_batch["manifest_json"] != manifest_json:
-        raise RuntimeError(
-            f"Batch '{batch_name}' was previously started with a different manifest. "
-            "Do not overwrite or mix its outputs."
-        )
+    else:
+        existing_manifest = json.loads(existing_batch["manifest_json"])
+        if _batch_identity(existing_manifest) != current_identity:
+            raise RuntimeError(
+                f"Batch '{batch_name}' was previously started with a different immutable manifest identity. "
+                "Do not overwrite or mix its outputs."
+            )
+        # If a dry check used an equivalent relative path and no seed has begun, retain
+        # the later full manifest so the recorded invocation mirrors the actual run.
+        existing_run_count = connection.execute(
+            "SELECT COUNT(*) AS n FROM run_status WHERE batch_name = ?", (batch_name,)
+        ).fetchone()["n"]
+        if existing_run_count == 0 and existing_batch["manifest_json"] != manifest_json:
+            with connection:
+                connection.execute(
+                    "UPDATE batches SET manifest_json = ? WHERE batch_name = ?",
+                    (manifest_json, batch_name),
+                )
 
 
 def run_is_complete(

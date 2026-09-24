@@ -67,12 +67,23 @@ def main() -> None:
         results_dir = Path(temp) / "R1_final_TL"
         batch = {
             "batch_name": "seeds_001_005",
+            "purpose": "technical_acceptance_preflight_included_in_final_100_seeds",
             "preflight": True,
             "models": ["Xception"],
             "seeds": [1, 2, 3, 4, 5],
             "protocol": protocol(),
+            "secure_root": "../synthetic_project",
+            "split_manifest": "../secure_config/locked.csv",
+            "split_manifest_sha256": "synthetic_manifest",
+            "protocol_file": "../secure_outputs/selected_protocol.json",
+            "protocol_file_sha256": "synthetic_protocol",
+            "selection_provenance": "../secure_outputs/selection_provenance.json",
+            "selection_provenance_sha256": "synthetic_provenance",
             "split_counts": {"train": 61, "validation": 31, "test": 46},
             "split_class_counts": {"train": {"0": 36, "1": 25}, "validation": {"0": 20, "1": 11}, "test": {"0": 26, "1": 20}},
+            "test_data_accessed": True,
+            "selection_performed": False,
+            "best_seed_selection_performed": False,
             "runtime": {"git_commit": "synthetic", "tensorflow_version": "synthetic", "python_version": "synthetic"},
         }
         signature = {
@@ -105,6 +116,21 @@ def main() -> None:
         connection = connect_results_database(results_dir)
         try:
             initialise_results_store(connection, batch_name="seeds_001_005", batch_manifest=batch, study_signature=signature)
+            # A real tmux launcher may spell the same secure paths absolutely after a
+            # dry check used relative paths. Hashes, not path text, define compatibility.
+            launcher_batch = dict(batch)
+            launcher_batch.update(
+                {
+                    "secure_root": "/secure/synthetic_project",
+                    "split_manifest": "/secure/secure_config/locked.csv",
+                    "protocol_file": "/secure/secure_outputs/selected_protocol.json",
+                    "selection_provenance": "/secure/secure_outputs/selection_provenance.json",
+                    "runtime": {"git_commit": "synthetic", "tensorflow_version": "synthetic", "python_version": "synthetic", "invocation": "launcher"},
+                }
+            )
+            launcher_signature = dict(signature)
+            launcher_signature["code_commit"] = "synthetic_output_safety_patch"
+            initialise_results_store(connection, batch_name="seeds_001_005", batch_manifest=launcher_batch, study_signature=launcher_signature)
             for seed in range(1, 6):
                 mark_run_started(connection, model_name="Xception", seed=seed, batch_name="seeds_001_005")
                 record_completed_run(
@@ -119,6 +145,7 @@ def main() -> None:
                     phase_rows=phase_rows,
                 )
             assert run_is_complete(connection, "Xception", 1, expected_test_patients=46)
+            initialise_results_store(connection, batch_name="seeds_001_005", batch_manifest=launcher_batch, study_signature=launcher_signature)
             validation = validate_results_database(connection, models=["Xception"], seeds=[1, 2, 3, 4, 5], expected_test_patients=46)
             assert validation["summary"]["valid"], validation["summary"]
             assert validation["summary"]["complete_runs"] == 5
