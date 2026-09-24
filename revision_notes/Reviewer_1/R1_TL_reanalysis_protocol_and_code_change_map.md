@@ -217,9 +217,9 @@ The following work is the complete TL-only implementation scope. It should be co
 | FV-01 | Read the selected-protocol manifest rather than accept unverified ad hoc settings. | Prevents silent post-selection changes between CV and final testing. |
 | FV-02 | Read a secure explicit 61/31/46 split manifest; verify counts, labels, no overlap, and filename/label alignment before fitting. | Documents the historic benchmark split and prevents accidental split drift. |
 | FV-03 | Iterate exactly over predeclared seeds 1–100 for each of the eleven locked architectures. | Retains stability comparison while making the seed list auditable. |
-| FV-04 | Save one full-precision patient-level row per training, validation, and test prediction with model, protocol ID, seed, split, secure patient/image ID, observed label, probability, and binary prediction. | Enables later seed aggregation, calibration, bootstrap CIs, paired tests, and EL construction without rereading ambiguous Excel strings. |
-| FV-05 | Include model/protocol/seed in every output filename and directory. Do not append incompatible results silently and do not overwrite prior seed outputs. | Corrects the legacy overwriting risk. |
-| FV-06 | Keep a run-level summary workbook or CSV for descriptive stability metrics, but do not calculate Kruskal–Wallis, Mann–Whitney, best-seed, or test-selected winner outputs. | Addresses Reviewer 1 Comments 4 and 5. |
+| FV-04 | Atomically store one full-precision patient-level **test** prediction per completed model/seed with secure patient ID, protocol ID, seed, observed label, probability, and binary prediction in one secure SQLite results database. | Enables later seed aggregation, calibration, bootstrap CIs, paired tests, and EL construction without ambiguous Excel strings or thousands of files. |
+| FV-05 | Store run metrics, phase parameters, test predictions, and completion status in the same resumable database; reject incompatible protocol/split/code signatures and permit only structurally complete runs to be skipped on resume. | Corrects the legacy overwriting risk while retaining one compact working-results file. |
+| FV-06 | Export one validated, human-readable Excel workbook only after all expected runs are complete; do not calculate Kruskal–Wallis, Mann–Whitney, best-seed, or test-selected winner outputs. | Retains practical inspectability while addressing Reviewer 1 Comments 4 and 5. |
 
 ### 7.4 Launcher and configuration changes
 

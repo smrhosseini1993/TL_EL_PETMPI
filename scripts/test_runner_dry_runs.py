@@ -60,15 +60,15 @@ def main() -> None:
         for index in range(61):
             name = f"train_{index:03d}.jpg"
             (training / name).touch()
-            rows.append({"patient_id": f"train_{index:03d}", "relative_path": f"data/training/{name}", "split": "train", "observed_label": index % 2})
+            rows.append({"patient_id": f"train_{index:03d}", "relative_path": f"data/training/{name}", "split": "train", "observed_label": 0 if index < 36 else 1})
         for index in range(31):
             name = f"validation_{index:03d}.jpg"
             (training / name).touch()
-            rows.append({"patient_id": f"validation_{index:03d}", "relative_path": f"data/training/{name}", "split": "validation", "observed_label": index % 2})
+            rows.append({"patient_id": f"validation_{index:03d}", "relative_path": f"data/training/{name}", "split": "validation", "observed_label": 0 if index < 20 else 1})
         for index in range(46):
             name = f"test_{index:03d}.jpg"
             (testing / name).touch()
-            rows.append({"patient_id": f"test_{index:03d}", "relative_path": f"data/test/{name}", "split": "test", "observed_label": index % 2})
+            rows.append({"patient_id": f"test_{index:03d}", "relative_path": f"data/test/{name}", "split": "test", "observed_label": 0 if index < 26 else 1})
         split_manifest = Path(temp) / "fixed_split.csv"
         pd.DataFrame(rows).to_csv(split_manifest, index=False)
 
@@ -79,7 +79,7 @@ def main() -> None:
         (protocol_dir / "selection_provenance.json").write_text(
             json.dumps({"test_data_accessed": False, "selected_protocol": protocol}), encoding="utf-8"
         )
-        fixed_output = Path(temp) / "fixed_output"
+        final_results = Path(temp) / "R1_final_TL"
         run(
             [
                 sys.executable,
@@ -90,8 +90,10 @@ def main() -> None:
                 str(split_manifest),
                 "--protocol-file",
                 str(protocol_dir / "selected_protocol.json"),
-                "--output-dir",
-                str(fixed_output),
+                "--results-dir",
+                str(final_results),
+                "--batch-name",
+                "seeds_001_005",
                 "--models",
                 "Xception",
                 "--seeds",
@@ -100,7 +102,8 @@ def main() -> None:
                 "--dry-run",
             ]
         )
-        assert (fixed_output / "manifests" / "fixed_split_run_manifest.json").is_file()
+        assert (final_results / "r1_final_tl_runs.sqlite").is_file()
+        assert (final_results / "run_manifest_seeds_001_005.json").is_file()
         print("Synthetic runner dry-run checks passed.")
 
 
