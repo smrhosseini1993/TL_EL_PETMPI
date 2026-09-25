@@ -9,12 +9,19 @@ from __future__ import annotations
 import argparse
 import json
 import sqlite3
+import sys
 from pathlib import Path
 from typing import Any, Iterable, List, Mapping
 
 import pandas as pd
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
+
+# Permit `python scripts/...` from the repository root without requiring
+# PYTHONPATH. This is the documented invocation on the hospital server.
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from final_results_store import (
     DATABASE_NAME,
