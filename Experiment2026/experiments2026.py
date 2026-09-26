@@ -189,8 +189,6 @@ def make_dataset(paths: Sequence[Path], labels: Sequence[int], model_name: str, 
     path_text = [str(path) for path in paths]
     label_values = np.asarray(labels, dtype=np.float32)
     dataset = tf.data.Dataset.from_tensor_slices((path_text, label_values))
-    if training:
-        dataset = dataset.shuffle(buffer_size=len(path_text), seed=seed, reshuffle_each_iteration=True)
 
     def preprocess(image_path: tf.Tensor, label: tf.Tensor) -> Tuple[tf.Tensor, tf.Tensor]:
         image = tf.io.read_file(image_path)
@@ -202,6 +200,9 @@ def make_dataset(paths: Sequence[Path], labels: Sequence[int], model_name: str, 
         return image, label
 
     dataset = dataset.map(preprocess, num_parallel_calls=tf.data.AUTOTUNE)
+    # Legacy experiments_validation.py passed an ordered tf.data.Dataset to model.fit.
+    # Its shuffle=True argument does not shuffle a Dataset input, so preserve that exact
+    # order here rather than introducing a new per-epoch training-data shuffle.
     return dataset.batch(batch_size, drop_remainder=False).prefetch(tf.data.AUTOTUNE)
 
 
