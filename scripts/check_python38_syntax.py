@@ -15,6 +15,10 @@ FILES = [
     REPO_ROOT / "scripts" / "validate_final_results_store.py",
     REPO_ROOT / "scripts" / "create_verified_historic_manifest.py",
     REPO_ROOT / "scripts" / "test_historic_manifest_generator.py",
+    REPO_ROOT / "analysis" / "r1_tl_results.py",
+    REPO_ROOT / "scripts" / "run_r1_tl_results_analysis.py",
+    REPO_ROOT / "scripts" / "create_r1_tl_results_notebook.py",
+    REPO_ROOT / "scripts" / "test_r1_tl_results_analysis.py",
 ]
 
 for path in FILES:
