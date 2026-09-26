@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 import sys
 import tempfile
 from pathlib import Path
@@ -24,6 +25,7 @@ from analysis.r1_tl_results import (
     integrity_table,
     patient_metric_table,
     phase_audit_table,
+    load_r1_results,
     plot_calibration,
     plot_confusion_tradeoff,
     plot_dca_overview,
@@ -96,7 +98,49 @@ def synthetic_results() -> R1Results:
     )
 
 
+def test_sqlite_loader() -> None:
+    """Exercise the read-only SQLite path, including named metadata columns."""
+    with tempfile.TemporaryDirectory(prefix="r1_tl_loader_test_") as temporary:
+        output = Path(temporary)
+        database = output / "r1_final_tl_runs.sqlite"
+        connection = sqlite3.connect(str(database))
+        try:
+            connection.executescript(
+                """
+                CREATE TABLE metadata (key TEXT, value TEXT);
+                CREATE TABLE batches (batch_name TEXT, manifest_json TEXT, created_at TEXT);
+                CREATE TABLE run_status (model_name TEXT, seed INTEGER, status TEXT);
+                CREATE TABLE run_metrics (model_name TEXT, seed INTEGER);
+                CREATE TABLE test_predictions (patient_id TEXT, model_name TEXT, seed INTEGER, observed_label INTEGER, probability REAL);
+                CREATE TABLE phase_parameters (model_name TEXT, seed INTEGER, phase INTEGER);
+                """
+            )
+            connection.execute("INSERT INTO metadata VALUES (?, ?)", ("loader_test", json.dumps({"ok": True})))
+            connection.execute("INSERT INTO batches VALUES (?, ?, ?)", ("synthetic", "{}", "synthetic"))
+            statuses, metrics, predictions, phases = [], [], [], []
+            for model_name in (
+                "VGG16", "VGG19", "ResNet50", "ResNet101", "ResNet152", "InceptionV3",
+                "InceptionResNetV2", "DenseNet169", "DenseNet201", "MobileNetV2", "Xception",
+            ):
+                for seed in range(1, 101):
+                    statuses.append((model_name, seed, "completed"))
+                    metrics.append((model_name, seed))
+                    phases.extend((model_name, seed, phase) for phase in (1, 2, 3))
+                    predictions.extend((f"patient_{patient:03d}", model_name, seed, patient % 2, 0.5) for patient in range(46))
+            connection.executemany("INSERT INTO run_status VALUES (?, ?, ?)", statuses)
+            connection.executemany("INSERT INTO run_metrics VALUES (?, ?)", metrics)
+            connection.executemany("INSERT INTO phase_parameters VALUES (?, ?, ?)", phases)
+            connection.executemany("INSERT INTO test_predictions VALUES (?, ?, ?, ?, ?)", predictions)
+            connection.commit()
+        finally:
+            connection.close()
+        loaded = load_r1_results(output)
+        assert loaded.metadata["loader_test"] == {"ok": True}
+        assert len(loaded.run_metrics) == 1100
+
+
 def main() -> None:
+    test_sqlite_loader()
     result = synthetic_results()
     validate_r1_results(result, expected_models=MODELS, expected_seeds=SEEDS)
     settings = AnalysisSettings(metric_bootstrap_iterations=100, dca_bootstrap_iterations=100, calibration_bins=5)

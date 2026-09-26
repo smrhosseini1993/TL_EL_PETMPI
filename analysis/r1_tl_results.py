@@ -124,6 +124,8 @@ def load_r1_results(results_dir: Union[Path, str]) -> R1Results:
         raise FileNotFoundError(f"No final SQLite results database at {database}")
     uri = f"file:{database.resolve()}?mode=ro"
     connection = sqlite3.connect(uri, uri=True)
+    # Metadata rows are accessed by column name below. pandas SQL reads are unaffected.
+    connection.row_factory = sqlite3.Row
     try:
         result = R1Results(
             run_status=_query(connection, "run_status").sort_values(["model_name", "seed"]),
