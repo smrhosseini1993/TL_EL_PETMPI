@@ -125,10 +125,6 @@ def set_seed(seed: int) -> None:
         tf.keras.utils.set_random_seed(seed)
     except AttributeError:
         pass
-    try:
-        tf.config.experimental.enable_op_determinism()
-    except (AttributeError, RuntimeError):
-        pass
 
 
 def load_binary_labels(path: Path) -> np.ndarray:
@@ -193,7 +189,9 @@ def make_dataset(paths: Sequence[Path], labels: Sequence[int], model_name: str, 
     def preprocess(image_path: tf.Tensor, label: tf.Tensor) -> Tuple[tf.Tensor, tf.Tensor]:
         image = tf.io.read_file(image_path)
         image = tf.image.decode_jpeg(image, channels=3)
-        image = tf.image.resize(image, (input_size, input_size), antialias=True)
+        # Preserve the legacy resize operation exactly; preprocessing after this point
+        # is the only intentional input-pipeline correction.
+        image = tf.image.resize(image, (input_size, input_size))
         image = tf.cast(image, tf.float32)
         # Deliberately no /255, no red/green change, no MixUp, and no geometric/color augmentation.
         image = preprocess_input(image)
@@ -203,7 +201,10 @@ def make_dataset(paths: Sequence[Path], labels: Sequence[int], model_name: str, 
     # Legacy experiments_validation.py passed an ordered tf.data.Dataset to model.fit.
     # Its shuffle=True argument does not shuffle a Dataset input, so preserve that exact
     # order here rather than introducing a new per-epoch training-data shuffle.
-    return dataset.batch(batch_size, drop_remainder=False).prefetch(tf.data.AUTOTUNE)
+    dataset = dataset.batch(batch_size, drop_remainder=False)
+    if not training:
+        dataset = dataset.prefetch(tf.data.AUTOTUNE)
+    return dataset
 
 
 def make_model(model_name: str, input_size: int) -> Tuple[keras.Model, keras.Model]:
@@ -244,11 +245,10 @@ def parameter_counts(model: keras.Model) -> Dict[str, int]:
 
 
 def compile_model(model: keras.Model) -> None:
-    # Recompilation is required after changing trainable flags in Keras.
     model.compile(
         optimizer=keras.optimizers.Adam(learning_rate=0.0003),
-        loss=keras.losses.BinaryCrossentropy(),
-        metrics=[keras.metrics.AUC(name="auc"), keras.metrics.BinaryAccuracy(name="binary_accuracy")],
+        loss=keras.losses.binary_crossentropy,
+        metrics=[keras.metrics.AUC(), "binary_accuracy"],
     )
 
 
@@ -263,7 +263,7 @@ def make_early_stopping() -> keras.callbacks.EarlyStopping:
     return keras.callbacks.EarlyStopping(monitor="val_binary_accuracy", mode="max", patience=4, restore_best_weights=True, verbose=1)
 
 
-def run_phase(model: keras.Model, base_model: keras.Model, train_dataset: tf.data.Dataset, validation_dataset: tf.data.Dataset, class_weights: Mapping[int, float], phase: int, phase_epochs: int, initial_epoch: int) -> Dict[str, Any]:
+def run_phase(model: keras.Model, base_model: keras.Model, train_dataset: tf.data.Dataset, validation_dataset: tf.data.Dataset, class_weights: Mapping[int, float], early_stopping_callback: keras.callbacks.EarlyStopping, phase: int, phase_epochs: int, initial_epoch: int) -> Dict[str, Any]:
     selected_layers = configure_legacy_fine_tuning(base_model, phase)
     # The initial compile and the subsequent inner-layer trainability changes reproduce
     # the legacy experiments_validation.py behavior exactly. No revised fine-tuning
@@ -276,9 +276,11 @@ def run_phase(model: keras.Model, base_model: keras.Model, train_dataset: tf.dat
         validation_data=validation_dataset,
         epochs=initial_epoch + phase_epochs,
         initial_epoch=initial_epoch,
-        callbacks=[make_early_stopping()],
+        callbacks=[early_stopping_callback],
         class_weight=dict(class_weights),
-        shuffle=False,
+        # This matches the old call. Keras ignores `shuffle` for a tf.data.Dataset,
+        # leaving the training examples in their fixed legacy order.
+        shuffle=True,
         verbose=2,
     )
     return {
@@ -297,13 +299,14 @@ def full_precision_csv(values: Sequence[float]) -> str:
 
 
 def binary_csv(probabilities: Sequence[float], threshold: float) -> str:
-    return ",".join(str(int(float(value) >= threshold)) for value in probabilities)
+    return ",".join(str(int(np.round(float(value)))) for value in probabilities)
 
 
 def calculate_metrics(labels: Sequence[int], probabilities: Sequence[float], threshold: float = 0.50) -> Dict[str, Any]:
     y_true = np.asarray(labels, dtype=int).reshape(-1)
     y_prob = np.asarray(probabilities, dtype=float).reshape(-1)
-    y_pred = (y_prob >= threshold).astype(int)
+    # Preserve the legacy implementation, which used np.round on model probabilities.
+    y_pred = np.round(y_prob).astype(int)
     tn, fp, fn, tp = confusion_matrix(y_true, y_pred, labels=[0, 1]).ravel()
     return {
         "accuracy": float(accuracy_score(y_true, y_pred)),
@@ -339,8 +342,8 @@ def study_lock_rows() -> pd.DataFrame:
         ("optimizer", "Adam with learning_rate=0.0003"),
         ("loss", "Binary cross-entropy"),
         ("class_weights", "Enabled; calculated from the 61 training labels in every run"),
-        ("threshold", "0.50"),
-        ("early_stopping", "validation binary accuracy; patience=4; restore_best_weights=True; fresh callback in each phase"),
+        ("threshold", "Legacy np.round(probability) conversion; equivalent to a 0.50 threshold except for an exact 0.50 tie"),
+        ("early_stopping", "validation binary accuracy; patience=4; restore_best_weights=True; one callback reused across the three legacy phases"),
         ("fine_tuning", "Literal legacy schedule: phase 1 freezes backbone; phase 2 marks backbone layer -2 trainable; phase 3 additionally marks backbone layer -3 trainable; no revised fine-tuning strategy was introduced."),
         ("seed", "Each Run_results row contains one prespecified integer seed; seed is applied to Python, NumPy and TensorFlow."),
         ("probability_storage", "Full precision comma-separated train/validation/test probabilities stored once per run; Patient_manifest fixes their within-split order."),
@@ -436,10 +439,11 @@ def main() -> None:
 
     class_weights = make_class_weights(split_data["train"]["labels"])
     model, base_model = make_model(args.model_name, args.input_size)
+    early_stopping_callback = make_early_stopping()
     started = time.time()
-    phase_1 = run_phase(model, base_model, train_dataset, validation_dataset, class_weights, phase=1, phase_epochs=args.phase1_epochs, initial_epoch=0)
-    phase_2 = run_phase(model, base_model, train_dataset, validation_dataset, class_weights, phase=2, phase_epochs=args.phase2_epochs, initial_epoch=args.phase1_epochs)
-    phase_3 = run_phase(model, base_model, train_dataset, validation_dataset, class_weights, phase=3, phase_epochs=args.phase3_epochs, initial_epoch=args.phase1_epochs + args.phase2_epochs)
+    phase_1 = run_phase(model, base_model, train_dataset, validation_dataset, class_weights, early_stopping_callback, phase=1, phase_epochs=args.phase1_epochs, initial_epoch=0)
+    phase_2 = run_phase(model, base_model, train_dataset, validation_dataset, class_weights, early_stopping_callback, phase=2, phase_epochs=args.phase2_epochs, initial_epoch=args.phase1_epochs)
+    phase_3 = run_phase(model, base_model, train_dataset, validation_dataset, class_weights, early_stopping_callback, phase=3, phase_epochs=args.phase3_epochs, initial_epoch=args.phase1_epochs + args.phase2_epochs)
     elapsed_seconds = time.time() - started
 
     train_probabilities = model.predict(train_evaluation_dataset, verbose=0).reshape(-1)
