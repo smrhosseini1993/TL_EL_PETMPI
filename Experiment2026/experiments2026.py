@@ -4,7 +4,8 @@
 This is a deliberately compact successor to experiments_validation.py. It retains the
 legacy 61/31/46 split, the 11 architectures, classifier head, class weighting, Adam
 learning rate, dropout, and layer -2/-3 fine-tuning schedule requested for the 2026
-rerun. It corrects only the input preprocessing and augmentation paths, and writes one
+rerun. It uses 256×256 inputs to match the published Teuho reference-CNN image
+representation, corrects the input preprocessing and augmentation paths, and writes one
 secure Excel workbook with all run-level results plus the fixed patient-order manifest.
 
 The output workbook contains patient-linked probabilities. It must remain on approved
@@ -106,7 +107,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-file", type=Path, default=DEFAULT_OUTPUT_FILE, help="Only generated result file: metrics2026.xlsx.")
     parser.add_argument("--model-name", choices=SUPPORTED_MODELS, required=True, help="One ImageNet architecture.")
     parser.add_argument("--seed", type=int, required=True, help="Prespecified integer seed for this run.")
-    parser.add_argument("--input-size", type=int, default=128, help="Fixed retained legacy input size (default: 128).")
+    parser.add_argument("--input-size", type=int, default=256, help="Fixed 256-pixel input size matching the published reference CNN (default: 256).")
     parser.add_argument("--batch-size", type=int, default=5, help="Fixed batch size (default: 5).")
     parser.add_argument("--phase1-epochs", type=int, default=100, help="Maximum head-training epochs (default: 100).")
     parser.add_argument("--phase2-epochs", type=int, default=100, help="Maximum legacy layer -2 fine-tuning epochs (default: 100).")
@@ -335,7 +336,8 @@ def study_lock_rows() -> pd.DataFrame:
         ("architectures", ";".join(SUPPORTED_MODELS)),
         ("split", "Historic alphabetical fixed split: first 61 development patients=train; next 31=validation; separate 46=test"),
         ("split_class_counts", "train: 36 label-0 / 25 label-1; validation: 20 / 11; test: 26 / 20"),
-        ("input", "128 x 128 x 3 RGB JPEG"),
+        ("input", "256 x 256 x 3 RGB JPEG"),
+        ("input_resolution_rationale", "Matches the 256 x 256 cropped polar-map representation reported for the published Teuho reference CNN."),
         ("preprocessing", "Architecture-specific official Keras preprocess_input; raw decoded/resized pixels remain 0-255 before that function"),
         ("augmentation", "None: no red/green channel shift, no MixUp, no geometric or colour augmentation"),
         ("classifier_head", "Flatten -> Dense(1024, ReLU) -> Dropout(0.50) -> Dense(512, ReLU) -> Dropout(0.50) -> Dense(256, ReLU) -> Dropout(0.50) -> sigmoid"),
@@ -406,8 +408,8 @@ def existing_run(output_file: Path, model_name: str, seed: int) -> bool:
 
 def main() -> None:
     args = parse_args()
-    if args.input_size != 128:
-        raise ValueError("This retained-legacy 2026 script is locked to --input-size 128.")
+    if args.input_size != 256:
+        raise ValueError("This 2026 rerun is locked to --input-size 256 to match the published reference CNN input representation.")
     if args.batch_size != 5:
         raise ValueError("This retained-legacy 2026 script is locked to --batch-size 5.")
     if min(args.phase1_epochs, args.phase2_epochs, args.phase3_epochs) <= 0:
@@ -421,7 +423,7 @@ def main() -> None:
     print("Locked fixed split verified: train=61 (0=36, 1=25); validation=31 (0=20, 1=11); test=46 (0=26, 1=20)")
     print("Model={0}; seed={1}; output={2}".format(args.model_name, args.seed, args.output_file))
     print("Preprocessing={0}".format(PREPROCESSING_LABELS[args.model_name]))
-    print("Augmentation=None; class weights=enabled; Adam LR=0.0003; dropout=0.50; input=128")
+    print("Augmentation=None; class weights=enabled; Adam LR=0.0003; dropout=0.50; input=256")
 
     if args.dry_run:
         print("Dry run complete: secure split, manifest order and locked arguments were validated; no model and no workbook were created.")
