@@ -109,7 +109,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model-name", choices=SUPPORTED_MODELS, required=True, help="One ImageNet architecture.")
     parser.add_argument("--seed", type=int, required=True, help="Prespecified integer seed for this run.")
     parser.add_argument("--input-size", type=int, default=128, help="Fixed retained benchmark input size (default: 128).")
-    parser.add_argument("--batch-size", type=int, default=5, help="Fixed batch size (default: 5).")
+    parser.add_argument("--batch-size", type=int, default=10, help="Fixed retained benchmark batch size (default: 10).")
     parser.add_argument("--phase1-epochs", type=int, default=100, help="Maximum head-training epochs (default: 100).")
     parser.add_argument("--phase2-epochs", type=int, default=100, help="Maximum legacy layer -2 fine-tuning epochs (default: 100).")
     parser.add_argument("--phase3-epochs", type=int, default=100, help="Maximum legacy layer -2/-3 fine-tuning epochs (default: 100).")
@@ -343,6 +343,7 @@ def study_lock_rows() -> pd.DataFrame:
         ("augmentation", "None: no red/green channel shift, no MixUp, no geometric or colour augmentation"),
         ("classifier_head", "Flatten -> Dense(1024, ReLU) -> Dropout(0.50) -> Dense(512, ReLU) -> Dropout(0.50) -> Dense(256, ReLU) -> Dropout(0.50) -> sigmoid"),
         ("optimizer", "Adam with learning_rate=0.0003"),
+        ("batch_size", "10 images per mini-batch, retained from the fixed-validation benchmark launcher."),
         ("loss", "Binary cross-entropy"),
         ("class_weights", "Enabled; calculated from the 61 training labels in every run"),
         ("threshold", "Legacy np.round(probability) conversion; equivalent to a 0.50 threshold except for an exact 0.50 tie"),
@@ -411,8 +412,8 @@ def main() -> None:
     args = parse_args()
     if args.input_size != 128:
         raise ValueError("This retained benchmark rerun is locked to --input-size 128.")
-    if args.batch_size != 5:
-        raise ValueError("This retained-legacy 2026 script is locked to --batch-size 5.")
+    if args.batch_size != 10:
+        raise ValueError("This retained benchmark rerun is locked to --batch-size 10.")
     if min(args.phase1_epochs, args.phase2_epochs, args.phase3_epochs) <= 0:
         raise ValueError("All three phase epoch limits must be positive.")
 
@@ -424,7 +425,7 @@ def main() -> None:
     print("Locked fixed split verified: train=61 (0=36, 1=25); validation=31 (0=20, 1=11); test=46 (0=26, 1=20)")
     print("Model={0}; seed={1}; output={2}".format(args.model_name, args.seed, args.output_file))
     print("Preprocessing={0}".format(PREPROCESSING_LABELS[args.model_name]))
-    print("Augmentation=None; class weights=enabled; Adam LR=0.0003; dropout=0.50; input=128")
+    print("Augmentation=None; class weights=enabled; Adam LR=0.0003; dropout=0.50; input=128; batch=10")
 
     if args.dry_run:
         print("Dry run complete: secure split, manifest order and locked arguments were validated; no model and no workbook were created.")

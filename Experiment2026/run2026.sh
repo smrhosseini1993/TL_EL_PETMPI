@@ -36,7 +36,7 @@ printf 'Data root: %s\n' "${ROOT_DIR}"
 printf 'One output workbook: %s\n' "${OUTPUT_FILE}"
 printf 'Seeds: %s-%s\n' "${START_SEED}" "${END_SEED}"
 printf 'Models: %s\n' "${MODELS[*]}"
-printf 'Protocol: 128 input | Adam 0.0003 | dropout 0.50 | class weights on | no augmentation\n\n'
+printf 'Protocol: 128 input | batch 10 | Adam 0.0003 | dropout 0.50 | class weights on | no augmentation\n\n'
 
 for model_name in "${MODELS[@]}"; do
   for seed in $(seq "${START_SEED}" "${END_SEED}"); do
@@ -47,7 +47,7 @@ for model_name in "${MODELS[@]}"; do
       --model-name "${model_name}" \
       --seed "${seed}" \
       --input-size 128 \
-      --batch-size 5 \
+      --batch-size 10 \
       --phase1-epochs 100 \
       --phase2-epochs 100 \
       --phase3-epochs 100 \
