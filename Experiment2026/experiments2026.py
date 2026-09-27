@@ -489,7 +489,6 @@ def main() -> None:
         "class_weight_0": float(class_weights[0]),
         "class_weight_1": float(class_weights[1]),
         "augmentation": "diagnostic_legacy_red_green_scale_1.10_training_only" if args.red_green_shift else "none",
-        "diagnostic_label": args.diagnostic_label,
         "preprocessing": PREPROCESSING_LABELS[args.model_name],
         "phase1_requested_epochs": phase_1["requested_epochs"],
         "phase1_actual_epochs": phase_1["actual_epochs"],
@@ -510,6 +509,11 @@ def main() -> None:
         "phase3_non_trainable_params": phase_3["non_trainable_params"],
         "phase3_selected_layers": phase_3["selected_layers"],
     }
+    # Preserve the Run_results column schema of the already completed clean
+    # 55-run workbook. Diagnostic provenance is carried in a separate workbook
+    # and its Study_lock; only diagnostic rows require this extra field.
+    if args.red_green_shift:
+        run_row["diagnostic_label"] = args.diagnostic_label
     run_row.update(prefixed_metrics("train", calculate_metrics(split_data["train"]["labels"], train_probabilities)))
     run_row.update(prefixed_metrics("validation", calculate_metrics(split_data["validation"]["labels"], validation_probabilities)))
     run_row.update(prefixed_metrics("test", calculate_metrics(split_data["test"]["labels"], test_probabilities)))
