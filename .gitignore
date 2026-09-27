@@ -22,6 +22,6 @@ log/
 configs/fixed_split_manifest.csv
 configs/selected_protocol.json
 
-# Secure single-workbook output from the retained-legacy 2026 rerun.
-Experiment2026/metrics2026.xlsx
+# Secure final and diagnostic workbooks from the retained-legacy 2026 rerun.
+Experiment2026/metrics2026*.xlsx
 Experiment2026/__pycache__/
