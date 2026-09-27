@@ -350,9 +350,6 @@ def study_lock_rows(batch_size: int = 10, red_green_shift: bool = False, diagnos
         ("input", "128 x 128 x 3 RGB JPEG"),
         ("input_resolution_rationale", "Historical common input representation. The manuscript rationale must cite Jarmo's separate development-only 128-versus-256 resolution analysis; its exact methods and results are not encoded in this run workbook."),
         ("preprocessing", "Architecture-specific official Keras preprocess_input; raw decoded/resized pixels remain 0-255 before that function"),
-        ("batch_size", str(batch_size)),
-        ("diagnostic_label", diagnostic_label),
-        ("red_green_shift", "Enabled only for a separately labelled diagnostic workbook; not permitted in the final reviewer-corrected protocol." if red_green_shift else "None: no red/green channel shift, no MixUp, no geometric or colour augmentation"),
         ("classifier_head", "Flatten -> Dense(1024, ReLU) -> Dropout(0.50) -> Dense(512, ReLU) -> Dropout(0.50) -> Dense(256, ReLU) -> Dropout(0.50) -> sigmoid"),
         ("optimizer", "Adam with learning_rate=0.0003"),
         ("batch_size", "10 images per mini-batch, retained from the fixed-validation benchmark launcher."),
@@ -365,6 +362,15 @@ def study_lock_rows(batch_size: int = 10, red_green_shift: bool = False, diagnos
         ("probability_storage", "Full precision comma-separated train/validation/test probabilities stored once per run; Patient_manifest fixes their within-split order."),
         ("analysis_scope", "Run-level distributions are descriptive stability only. Patient-level analysis must aggregate predictions by patient across seeds using Patient_manifest."),
     ]
+    # Keep the original final-protocol Study_lock schema so the completed clean
+    # 55-run workbook can safely receive seeds 6-100. Diagnostics always use a
+    # separate workbook and carry their extra protocol identifiers.
+    if diagnostic_label == "final_no_shift" and batch_size == 10 and not red_green_shift:
+        rows.insert(8, ("augmentation", "None: no red/green channel shift, no MixUp, no geometric or colour augmentation"))
+    else:
+        rows.insert(8, ("batch_size", str(batch_size)))
+        rows.insert(9, ("diagnostic_label", diagnostic_label))
+        rows.insert(10, ("red_green_shift", "Enabled only for a separately labelled diagnostic workbook; not permitted in the final reviewer-corrected protocol." if red_green_shift else "None"))
     return pd.DataFrame(rows, columns=["item", "value"])
 
 
