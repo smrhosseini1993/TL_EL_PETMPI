@@ -24,4 +24,5 @@ configs/selected_protocol.json
 
 # Secure final and diagnostic workbooks from the retained-legacy 2026 rerun.
 Experiment2026/metrics2026*.xlsx
+Experiment2026/baseline_metrics2026.xlsx
 Experiment2026/__pycache__/
