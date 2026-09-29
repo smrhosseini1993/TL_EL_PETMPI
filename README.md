@@ -26,6 +26,7 @@ The current `r1/tl-reanalysis` branch implements the revised TL workflow and the
 | `notebooks/R1_ensemble_configuration_selection.ipynb` | Reads only the raw final-protocol CV workbook, displays the 11-model development ranking, accepts manually entered Top-3/Top-5 pools, then displays the 10 candidate configurations. It writes no output and never reads historic test predictions. |
 | `notebooks/R1_final_ensemble_analysis.ipynb` | Reads the completed historic `metrics2026.xlsx` workbook and one manually entered development-selected pool/rule. It creates one raw 100-run ensemble workbook for later combined reporting. It never ranks alternative configurations on the test cohort. |
 | `notebooks/convert_metrics2026_to_legacy.ipynb` | Creates a separate old-layout `metrics_legacy_compatible.xlsx` from the final 1,100-run `metrics2026.xlsx`, for legacy plotting-cell compatibility only. It never modifies the audited source workbook. |
+| `notebooks/results_publish.ipynb` | The single paper-order reporting notebook. It validates the final TL, selected raw ensemble, conventional baseline, and optional CNN/clinical-reader inputs; then writes Tables T1–T4 and ST1–ST4, Figures F1–F3 and SF1, paired patient-level statistics, captions, and a provenance manifest. |
 
 ### Locked R1 protocol
 
@@ -139,6 +140,10 @@ For the historic-split final ensemble result, open `notebooks/R1_final_ensemble_
 ### Legacy plotting compatibility
 
 `notebooks/convert_metrics2026_to_legacy.ipynb` can create a separate `metrics_legacy_compatible.xlsx` workbook from the final `metrics2026.xlsx`. Its `sheet1` has the legacy metrics column names and four-decimal prediction text so old plotting cells can be adapted quickly. The source workbook is read-only and remains the auditable master dataset. Do not use the compatibility output to revive any legacy best-run, test-set-selection, Borda-count, or run-level inferential workflow.
+
+### Paper-order reporting package
+
+After the development-only ensemble configuration has been selected and `R1_final_ensemble_raw_runs.xlsx` has been created, open `notebooks/results_publish.ipynb` on the secure analysis computer. Its one configuration cell accepts the final 1,100-run `metrics2026.xlsx`, the six-comparator `baseline_metrics2026.xlsx`, the raw selected-ensemble workbook, and optional reference-CNN and clinical-reader files. It reproduces the submitted figures' visual language while applying the revision-stage analysis boundary: 100 seeds are descriptive stability only; all CIs, ROC/DCA/calibration curves, paired DeLong comparisons, and McNemar comparisons are calculated from one seed-mean prediction per patient. It writes a separate `results_publish` package and never modifies source workbooks.
 
 ## R1 outputs
 
