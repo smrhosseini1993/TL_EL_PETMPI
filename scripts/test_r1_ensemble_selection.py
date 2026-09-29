@@ -14,6 +14,9 @@ import pandas as pd
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
+EXPERIMENT_DIRECTORY = REPO_ROOT / "Experiment2026"
+if str(EXPERIMENT_DIRECTORY) not in sys.path:
+    sys.path.insert(0, str(EXPERIMENT_DIRECTORY))
 
 from analysis.r1_ensemble_core import (
     RULE_ORDER,
@@ -29,6 +32,7 @@ from analysis.r1_ensemble_core import (
     validate_manual_configuration,
     write_json,
 )
+from ensemble_selection_cv_2026 import write_cv_results_workbook
 
 MODELS = (
     "VGG16", "VGG19", "ResNet50", "ResNet101", "ResNet152", "InceptionV3",
@@ -121,6 +125,30 @@ def test_cv_dry_run() -> None:
         assert fold_manifest["fold"].nunique() == 5
 
 
+def test_cv_results_workbook() -> None:
+    with tempfile.TemporaryDirectory(prefix="r1_ensemble_cv_workbook_") as temporary:
+        output = Path(temporary)
+        ranking = pd.DataFrame({
+            "development_rank": list(range(1, 12)),
+            "model_name": list(MODELS),
+            "pooled_oof_auc": np.linspace(0.90, 0.80, 11),
+        })
+        workbook = write_cv_results_workbook(
+            output_dir=output,
+            run_manifest={"test_data_accessed": False, "partial_technical_preflight": False},
+            fold_manifest=pd.DataFrame({"patient_id": ["fixture_001"], "fold": [1], "observed_label": [0]}),
+            all_predictions=pd.DataFrame({"patient_id": ["fixture_001"], "model_name": [MODELS[0]], "fold": [1], "observed_label": [0], "probability": [0.1]}),
+            fold_metrics=pd.DataFrame({"model_name": [MODELS[0]], "fold": [1], "auc": [0.8]}),
+            phase_parameters=pd.DataFrame({"model_name": [MODELS[0]], "fold": [1], "phase": [1]}),
+            ranking=ranking,
+            full_run=True,
+        )
+        sheets = pd.read_excel(workbook, sheet_name=None)
+        assert {"Study_lock", "Fold_manifest", "Architecture_ranking", "Candidate_pools", "OOF_predictions", "Fold_metrics", "Phase_parameters"}.issubset(sheets)
+        assert len(sheets["Candidate_pools"]) == 8
+        assert sheets["Candidate_pools"].loc[sheets["Candidate_pools"]["pool_name"] == "Top-3", "model_name"].tolist() == list(MODELS[:3])
+
+
 def test_final_historic_split_utilities() -> None:
     top5 = list(MODELS[:5])
     configuration = validate_manual_configuration(
@@ -182,11 +210,11 @@ def test_notebook_content() -> None:
     notebook = json.loads((REPO_ROOT / "notebooks" / "R1_ensemble_configuration_selection.ipynb").read_text(encoding="utf-8"))
     content = "".join("".join(cell.get("source", [])) for cell in notebook["cells"])
     assert "Borda Count" in content  # Explicitly documents its exclusion.
-    assert "Borda Count is deliberately excluded" in content
+    assert "Borda Count is excluded" in content
     assert "10 configurations" in content
-    assert "WRITE_SELECTION_LOCK" in content
-    assert "metrics2026.xlsx" not in content
-    assert "test cohort" in content
+    assert "CV_WORKBOOK" in content
+    assert "configuration_table" in content
+    assert "This notebook has not written a selection file" in content
     final_notebook = json.loads((REPO_ROOT / "notebooks" / "R1_final_ensemble_analysis.ipynb").read_text(encoding="utf-8"))
     final_content = "".join("".join(cell.get("source", [])) for cell in final_notebook["cells"])
     assert "metrics2026.xlsx" in final_content
@@ -199,6 +227,7 @@ def test_notebook_content() -> None:
 def main() -> None:
     test_core_selection()
     test_cv_dry_run()
+    test_cv_results_workbook()
     test_final_historic_split_utilities()
     test_notebook_content()
     print("R1 development-only ensemble-selection tests passed.")

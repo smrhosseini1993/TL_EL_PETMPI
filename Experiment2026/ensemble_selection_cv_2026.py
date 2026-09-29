@@ -322,6 +322,52 @@ def architecture_summary(all_predictions: pd.DataFrame) -> pd.DataFrame:
     return summary
 
 
+def write_cv_results_workbook(
+    output_dir: Path,
+    run_manifest: Mapping[str, Any],
+    fold_manifest: pd.DataFrame,
+    all_predictions: pd.DataFrame,
+    fold_metrics: pd.DataFrame,
+    phase_parameters: pd.DataFrame,
+    ranking: pd.DataFrame,
+    full_run: bool,
+) -> Path:
+    """Write one readable secure CV workbook after all requested fits complete."""
+    output_file = output_dir / "ensemble_selection_cv_results.xlsx"
+    lock_rows = [{"item": key, "value": json.dumps(value, sort_keys=True) if isinstance(value, (dict, list, bool)) else value} for key, value in run_manifest.items()]
+    if full_run:
+        pools = {
+            "Top-3": ranking.loc[ranking["development_rank"] <= 3, ["development_rank", "model_name"]],
+            "Top-5": ranking.loc[ranking["development_rank"] <= 5, ["development_rank", "model_name"]],
+        }
+        pool_rows: List[Dict[str, Any]] = []
+        for pool_name, pool in pools.items():
+            for pool_rank, row in enumerate(pool.sort_values("development_rank").itertuples(index=False), start=1):
+                pool_rows.append({
+                    "pool_name": pool_name,
+                    "pool_rank": pool_rank,
+                    "development_rank": int(row.development_rank),
+                    "model_name": str(row.model_name),
+                })
+        candidate_pools = pd.DataFrame(pool_rows)
+    else:
+        candidate_pools = pd.DataFrame(columns=["pool_name", "pool_rank", "development_rank", "model_name"])
+    with pd.ExcelWriter(str(output_file), engine="openpyxl", mode="w") as writer:
+        pd.DataFrame(lock_rows).to_excel(writer, sheet_name="Study_lock", index=False)
+        fold_manifest.to_excel(writer, sheet_name="Fold_manifest", index=False)
+        ranking.to_excel(writer, sheet_name="Architecture_ranking", index=False)
+        candidate_pools.to_excel(writer, sheet_name="Candidate_pools", index=False)
+        all_predictions.to_excel(writer, sheet_name="OOF_predictions", index=False)
+        fold_metrics.to_excel(writer, sheet_name="Fold_metrics", index=False)
+        phase_parameters.to_excel(writer, sheet_name="Phase_parameters", index=False)
+        for worksheet in writer.book.worksheets:
+            worksheet.freeze_panes = "A2"
+            worksheet.auto_filter.ref = worksheet.dimensions
+            for cell in worksheet[1]:
+                cell.font = cell.font.copy(bold=True)
+    return output_file
+
+
 def main() -> None:
     args = parse_args()
     args.root = args.root.resolve()
@@ -399,10 +445,21 @@ def main() -> None:
     phase_parameters.to_csv(args.output_dir / "summaries" / "cv_phase_parameters.csv", index=False)
     ranking = architecture_summary(all_predictions)
     ranking.to_csv(args.output_dir / "summaries" / "architecture_oof_ranking.csv", index=False)
+    workbook = write_cv_results_workbook(
+        output_dir=args.output_dir,
+        run_manifest=manifest,
+        fold_manifest=fold_manifest,
+        all_predictions=all_predictions,
+        fold_metrics=fold_metrics,
+        phase_parameters=phase_parameters,
+        ranking=ranking,
+        full_run=full_run,
+    )
     if full_run:
         print("\nCompleted all 55 development-only fits.")
         print("Saved architecture ranking: {0}".format(args.output_dir / "summaries" / "architecture_oof_ranking.csv"))
-        print("Next step: use only oof_predictions_all.csv in R1_ensemble_configuration_selection.ipynb.")
+        print("Saved CV results workbook: {0}".format(workbook))
+        print("Next step: use this workbook in R1_ensemble_configuration_selection.ipynb.")
     else:
         print("\nPartial technical preflight complete. Do not use partial output for ensemble selection.")
 
