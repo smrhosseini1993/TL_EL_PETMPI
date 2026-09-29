@@ -24,6 +24,9 @@ FILES = [
     REPO_ROOT / "scripts" / "create_r1_ensemble_selection_notebook.py",
     REPO_ROOT / "scripts" / "create_r1_final_ensemble_notebook.py",
     REPO_ROOT / "scripts" / "test_r1_ensemble_selection.py",
+    REPO_ROOT / "analysis" / "metrics2026_legacy_converter.py",
+    REPO_ROOT / "scripts" / "create_metrics2026_legacy_converter_notebook.py",
+    REPO_ROOT / "scripts" / "test_metrics2026_legacy_converter.py",
 ]
 
 for path in FILES:

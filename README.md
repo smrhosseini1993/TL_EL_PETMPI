@@ -25,6 +25,7 @@ The current `r1/tl-reanalysis` branch implements the revised TL workflow and the
 | `analysis/r1_ensemble_core.py` | Shared implementations of the five allowed combination rules, OOF architecture/configuration ranking, development-only AUC weights, lock-file creation, and structural validation. Borda Count is not implemented. |
 | `notebooks/R1_ensemble_configuration_selection.ipynb` | Reads only the raw final-protocol CV workbook, displays the 11-model development ranking, accepts manually entered Top-3/Top-5 pools, then displays the 10 candidate configurations. It writes no output and never reads historic test predictions. |
 | `notebooks/R1_final_ensemble_analysis.ipynb` | Reads the completed historic `metrics2026.xlsx` workbook and one manually entered development-selected pool/rule. It creates one raw 100-run ensemble workbook for later combined reporting. It never ranks alternative configurations on the test cohort. |
+| `notebooks/convert_metrics2026_to_legacy.ipynb` | Creates a separate old-layout `metrics_legacy_compatible.xlsx` from the final 1,100-run `metrics2026.xlsx`, for legacy plotting-cell compatibility only. It never modifies the audited source workbook. |
 
 ### Locked R1 protocol
 
@@ -134,6 +135,10 @@ RUN_STAGE=full bash Experiment2026/run_ensemble_selection_cv_2026.sh
 The complete CV run writes one secure `ensemble_selection_cv_raw_results.xlsx` workbook containing only raw OOF predictions, fold metrics, phase parameters, and the study lock. Open `notebooks/R1_ensemble_configuration_selection.ipynb` only after this workbook exists. Its early cells display the 11-architecture ranking. Enter the Top-3 and Top-5 pools manually in its later pool cell, then use the displayed 10 configuration rows—Sum, Median, Max, Majority Voting, and Weighted Sum across both pools—to choose the rule. The notebook writes no output. Copy the manually entered pools and selected rule into the final ensemble notebook; no configuration can be selected by the 46-patient test cohort.
 
 For the historic-split final ensemble result, open `notebooks/R1_final_ensemble_analysis.ipynb`. Copy the manually entered Top-3/Top-5 pools and one development-selected rule into its configuration cell, then set `RUN_ANALYSIS=True`. The notebook reads `Experiment2026/metrics2026.xlsx`, validates all 11 architectures × 100 runs, and writes one simple `R1_final_ensemble_raw_runs.xlsx` workbook containing the 100 run-matched ensemble runs, ordered probabilities, test manifest, and study lock. It does not rank or evaluate any alternative configuration on the test set.
+
+### Legacy plotting compatibility
+
+`notebooks/convert_metrics2026_to_legacy.ipynb` can create a separate `metrics_legacy_compatible.xlsx` workbook from the final `metrics2026.xlsx`. Its `sheet1` has the legacy metrics column names and four-decimal prediction text so old plotting cells can be adapted quickly. The source workbook is read-only and remains the auditable master dataset. Do not use the compatibility output to revive any legacy best-run, test-set-selection, Borda-count, or run-level inferential workflow.
 
 ## R1 outputs
 
