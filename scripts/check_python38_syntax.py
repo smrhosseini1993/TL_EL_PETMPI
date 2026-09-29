@@ -19,6 +19,10 @@ FILES = [
     REPO_ROOT / "scripts" / "run_r1_tl_results_analysis.py",
     REPO_ROOT / "scripts" / "create_r1_tl_results_notebook.py",
     REPO_ROOT / "scripts" / "test_r1_tl_results_analysis.py",
+    REPO_ROOT / "Experiment2026" / "ensemble_selection_cv_2026.py",
+    REPO_ROOT / "analysis" / "r1_ensemble_core.py",
+    REPO_ROOT / "scripts" / "create_r1_ensemble_selection_notebook.py",
+    REPO_ROOT / "scripts" / "test_r1_ensemble_selection.py",
 ]
 
 for path in FILES:

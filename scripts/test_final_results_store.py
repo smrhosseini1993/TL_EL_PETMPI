@@ -15,6 +15,10 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 from final_results_store import (
     connect_results_database,
     initialise_results_store,
@@ -23,9 +27,6 @@ from final_results_store import (
     run_is_complete,
     validate_results_database,
 )
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
-
 
 def protocol() -> dict:
     return {

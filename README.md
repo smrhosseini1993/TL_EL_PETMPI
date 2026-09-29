@@ -4,7 +4,7 @@ Code for the revision-stage transfer-learning (TL) reanalysis of PET polar-map c
 
 ## R1 transfer-learning workflow
 
-The current `r1/tl-reanalysis` branch implements the TL portion of the revised experiment. The ensemble notebook is legacy Version 1 code and **must not be used for the R1 ensemble analysis**. A separate revision-stage ensemble workflow will be added only after the TL outputs have been verified.
+The current `r1/tl-reanalysis` branch implements the revised TL workflow and the development-only ensemble-configuration selection workflow. `EL_ensemble.ipynb` is legacy Version 1 code and **must not be used for the R1 ensemble analysis**. The valid R1 ensemble process ranks candidate configurations using development-only out-of-fold predictions before any selected configuration is evaluated with the historic 61/31/46 test predictions.
 
 | File | Role |
 |---|---|
@@ -20,6 +20,10 @@ The current `r1/tl-reanalysis` branch implements the TL portion of the revised e
 | `run_TL_fixedvalidation.sh` | 5-seed technical-preflight and remaining 95-seed production launcher template. |
 | `scripts/validate_final_results_store.py` | Performs structural coverage validation without printing or using performance metrics. |
 | `scripts/export_final_results_workbook.py` | Validates the secure SQLite store and exports one readable final Excel workbook only after all expected runs are complete. |
+| `Experiment2026/ensemble_selection_cv_2026.py` | Development-only 5-fold CV runner matching the final retained 128×128 Experiment2026 protocol. It creates one OOF probability per development patient/architecture, never opens test data, and is used only to select the ensemble recipe. |
+| `Experiment2026/run_ensemble_selection_cv_2026.sh` | Separate VGG16 technical-preflight and complete 11-architecture × 5-fold CV launcher. The preflight and complete runs always use different secure output directories. |
+| `analysis/r1_ensemble_core.py` | Shared implementations of the five allowed combination rules, OOF architecture/configuration ranking, development-only AUC weights, lock-file creation, and structural validation. Borda Count is not implemented. |
+| `notebooks/R1_ensemble_configuration_selection.ipynb` | Reads only final-protocol development OOF predictions, ranks the Top-3/Top-5 × five-rule candidate set, and writes one reproducible selection lock after review. |
 
 ### Locked R1 protocol
 
@@ -113,6 +117,20 @@ python scripts/validate_final_results_store.py \
   --results-dir "${RESULTS_DIR}" \
   --seeds 1-5
 ```
+
+### R1 ensemble configuration selection: development data only
+
+The retained 128×128 `Experiment2026` benchmark is the historic 61/31/46 analysis used for the final TL and EL comparison. Its ensemble configuration is selected separately with a five-fold CV that opens only the 92 development patients. It must use a new secure output directory and must never read `data/test`.
+
+```bash
+# Technical preflight: VGG16 × 5 folds only. Do not use its output for selection.
+RUN_STAGE=preflight bash Experiment2026/run_ensemble_selection_cv_2026.sh
+
+# Complete selection run: 11 architectures × 5 folds = 55 fits.
+RUN_STAGE=full bash Experiment2026/run_ensemble_selection_cv_2026.sh
+```
+
+Open `notebooks/R1_ensemble_configuration_selection.ipynb` only after the complete run has produced `oof_predictions_all.csv`. The notebook evaluates exactly 10 configurations: Sum, Median, Max, Majority Voting, and Weighted Sum across the Top-3 and Top-5 development-ranked pools. It selects the rank-1 configuration by pooled OOF AUC, with fixed exact-tie rules, and writes `ensemble_selection_lock.json`. The later final ensemble analysis must apply only that locked configuration to the completed historic-split TL predictions; no configuration can be selected by the 46-patient test cohort.
 
 ## R1 outputs
 

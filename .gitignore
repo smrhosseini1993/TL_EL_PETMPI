@@ -26,3 +26,5 @@ configs/selected_protocol.json
 Experiment2026/metrics2026*.xlsx
 Experiment2026/baseline_metrics2026.xlsx
 Experiment2026/__pycache__/
+Experiment2026/secure_outputs/
+Experiment2026/secure_analysis/
