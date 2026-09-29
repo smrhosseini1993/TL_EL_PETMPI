@@ -20,8 +20,13 @@ from analysis.r1_ensemble_core import (
     architecture_oof_ranking,
     candidate_pools,
     configuration_ranking,
+    create_run_matched_ensemble_predictions,
+    load_historic_tl_workbook,
+    patient_level_summary,
+    run_stability_summary,
     selection_lock,
     validate_oof_predictions,
+    validate_manual_configuration,
     write_json,
 )
 
@@ -116,6 +121,63 @@ def test_cv_dry_run() -> None:
         assert fold_manifest["fold"].nunique() == 5
 
 
+def test_final_historic_split_utilities() -> None:
+    top5 = list(MODELS[:5])
+    configuration = validate_manual_configuration(
+        top3_models=top5[:3],
+        top5_models=top5,
+        selected_pool="Top-5",
+        selected_rule="max",
+    )
+    labels = np.asarray([0] * 26 + [1] * 20)
+    rows = []
+    for model_index, model_name in enumerate(top5):
+        for seed in range(1, 101):
+            for patient_index, label in enumerate(labels):
+                base = 0.18 if label == 0 else 0.82
+                probability = np.clip(base + model_index * 0.01 + (seed % 5) * 0.002, 0.01, 0.99)
+                rows.append({
+                    "patient_id": "test_{0:03d}".format(patient_index),
+                    "observed_label": int(label),
+                    "model_name": model_name,
+                    "seed": seed,
+                    "probability": float(probability),
+                })
+    ensemble_predictions, run_metrics = create_run_matched_ensemble_predictions(pd.DataFrame(rows), configuration)
+    assert len(ensemble_predictions) == 100 * 46
+    assert len(run_metrics) == 100
+    assert ensemble_predictions.groupby("seed").size().eq(46).all()
+    stability = run_stability_summary(run_metrics)
+    assert stability.loc[0, "n_runs"] == 100
+    patient_predictions, patient_metrics = patient_level_summary(
+        ensemble_predictions, bootstrap_iterations=100, random_seed=42
+    )
+    assert len(patient_predictions) == 46
+    assert patient_metrics.loc[0, "n_test_patients"] == 46
+    assert patient_metrics.filter(regex="_point$").apply(lambda column: column.between(0, 1).all()).all()
+
+    with tempfile.TemporaryDirectory(prefix="r1_historic_workbook_") as temporary:
+        temporary_path = Path(temporary)
+        workbook = temporary_path / "metrics2026.xlsx"
+        probability_csv = ",".join(["0.10"] * 26 + ["0.90"] * 20)
+        run_rows = [
+            {"model_name": model_name, "seed": seed, "test_probabilities": probability_csv}
+            for model_name in MODELS for seed in range(1, 101)
+        ]
+        manifest_rows = [
+            {"split": "test", "within_split_order": index + 1, "file_name": "test_{0:03d}.jpg".format(index), "observed_label": int(label)}
+            for index, label in enumerate(labels)
+        ]
+        with pd.ExcelWriter(workbook, engine="openpyxl", mode="w") as writer:
+            pd.DataFrame(run_rows).to_excel(writer, sheet_name="Run_results", index=False)
+            pd.DataFrame(manifest_rows).to_excel(writer, sheet_name="Patient_manifest", index=False)
+            pd.DataFrame([{"item": "synthetic", "value": "test"}]).to_excel(writer, sheet_name="Study_lock", index=False)
+        loaded_predictions, loaded_manifest, loaded_lock = load_historic_tl_workbook(workbook, MODELS)
+        assert len(loaded_predictions) == len(MODELS) * 100 * 46
+        assert len(loaded_manifest) == 46
+        assert len(loaded_lock) == 1
+
+
 def test_notebook_content() -> None:
     notebook = json.loads((REPO_ROOT / "notebooks" / "R1_ensemble_configuration_selection.ipynb").read_text(encoding="utf-8"))
     content = "".join("".join(cell.get("source", [])) for cell in notebook["cells"])
@@ -125,11 +187,19 @@ def test_notebook_content() -> None:
     assert "WRITE_SELECTION_LOCK" in content
     assert "metrics2026.xlsx" not in content
     assert "test cohort" in content
+    final_notebook = json.loads((REPO_ROOT / "notebooks" / "R1_final_ensemble_analysis.ipynb").read_text(encoding="utf-8"))
+    final_content = "".join("".join(cell.get("source", [])) for cell in final_notebook["cells"])
+    assert "metrics2026.xlsx" in final_content
+    assert "TOP3_MODELS" in final_content
+    assert "TOP5_MODELS" in final_content
+    assert "SELECTED_RULE" in final_content
+    assert "RUN_ANALYSIS = False" in final_content
 
 
 def main() -> None:
     test_core_selection()
     test_cv_dry_run()
+    test_final_historic_split_utilities()
     test_notebook_content()
     print("R1 development-only ensemble-selection tests passed.")
 

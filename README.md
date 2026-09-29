@@ -24,6 +24,7 @@ The current `r1/tl-reanalysis` branch implements the revised TL workflow and the
 | `Experiment2026/run_ensemble_selection_cv_2026.sh` | Separate VGG16 technical-preflight and complete 11-architecture × 5-fold CV launcher. The preflight and complete runs always use different secure output directories. |
 | `analysis/r1_ensemble_core.py` | Shared implementations of the five allowed combination rules, OOF architecture/configuration ranking, development-only AUC weights, lock-file creation, and structural validation. Borda Count is not implemented. |
 | `notebooks/R1_ensemble_configuration_selection.ipynb` | Reads only final-protocol development OOF predictions, ranks the Top-3/Top-5 × five-rule candidate set, and writes one reproducible selection lock after review. |
+| `notebooks/R1_final_ensemble_analysis.ipynb` | Reads the completed historic `metrics2026.xlsx` workbook and one manually entered development-selected pool/rule. It creates 100 run-matched ensemble replicates, median (IQR) stability results, and one patient-level probability per test patient with bootstrap 95% CIs. It never ranks alternative configurations on the test cohort. |
 
 ### Locked R1 protocol
 
@@ -131,6 +132,8 @@ RUN_STAGE=full bash Experiment2026/run_ensemble_selection_cv_2026.sh
 ```
 
 Open `notebooks/R1_ensemble_configuration_selection.ipynb` only after the complete run has produced `oof_predictions_all.csv`. The notebook evaluates exactly 10 configurations: Sum, Median, Max, Majority Voting, and Weighted Sum across the Top-3 and Top-5 development-ranked pools. It selects the rank-1 configuration by pooled OOF AUC, with fixed exact-tie rules, and writes `ensemble_selection_lock.json`. The later final ensemble analysis must apply only that locked configuration to the completed historic-split TL predictions; no configuration can be selected by the 46-patient test cohort.
+
+For the historic-split final ensemble result, open `notebooks/R1_final_ensemble_analysis.ipynb`. Copy the displayed Top-3 and Top-5 lists and one development-selected rule into its configuration cell, then set `RUN_ANALYSIS=True`. The notebook reads `Experiment2026/metrics2026.xlsx`, validates all 11 architectures × 100 runs, and creates exactly 100 run-matched ensemble replicates from the selected constituents. It does not rank or evaluate any alternative configuration on the test set.
 
 ## R1 outputs
 
