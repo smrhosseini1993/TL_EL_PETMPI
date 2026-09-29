@@ -26,6 +26,8 @@ from analysis.r1_ensemble_core import (
     create_run_matched_ensemble_predictions,
     load_historic_tl_workbook,
     patient_level_summary,
+    raw_ensemble_run_results,
+    raw_ensemble_study_lock,
     run_stability_summary,
     selection_lock,
     validate_oof_predictions,
@@ -128,11 +130,6 @@ def test_cv_dry_run() -> None:
 def test_cv_results_workbook() -> None:
     with tempfile.TemporaryDirectory(prefix="r1_ensemble_cv_workbook_") as temporary:
         output = Path(temporary)
-        ranking = pd.DataFrame({
-            "development_rank": list(range(1, 12)),
-            "model_name": list(MODELS),
-            "pooled_oof_auc": np.linspace(0.90, 0.80, 11),
-        })
         workbook = write_cv_results_workbook(
             output_dir=output,
             run_manifest={"test_data_accessed": False, "partial_technical_preflight": False},
@@ -140,13 +137,11 @@ def test_cv_results_workbook() -> None:
             all_predictions=pd.DataFrame({"patient_id": ["fixture_001"], "model_name": [MODELS[0]], "fold": [1], "observed_label": [0], "probability": [0.1]}),
             fold_metrics=pd.DataFrame({"model_name": [MODELS[0]], "fold": [1], "auc": [0.8]}),
             phase_parameters=pd.DataFrame({"model_name": [MODELS[0]], "fold": [1], "phase": [1]}),
-            ranking=ranking,
-            full_run=True,
         )
         sheets = pd.read_excel(workbook, sheet_name=None)
-        assert {"Study_lock", "Fold_manifest", "Architecture_ranking", "Candidate_pools", "OOF_predictions", "Fold_metrics", "Phase_parameters"}.issubset(sheets)
-        assert len(sheets["Candidate_pools"]) == 8
-        assert sheets["Candidate_pools"].loc[sheets["Candidate_pools"]["pool_name"] == "Top-3", "model_name"].tolist() == list(MODELS[:3])
+        assert {"Study_lock", "Fold_manifest", "OOF_predictions", "Fold_metrics", "Phase_parameters"}.issubset(sheets)
+        assert "Architecture_ranking" not in sheets
+        assert "Candidate_pools" not in sheets
 
 
 def test_final_historic_split_utilities() -> None:
@@ -183,6 +178,11 @@ def test_final_historic_split_utilities() -> None:
     assert len(patient_predictions) == 46
     assert patient_metrics.loc[0, "n_test_patients"] == 46
     assert patient_metrics.filter(regex="_point$").apply(lambda column: column.between(0, 1).all()).all()
+    raw_runs = raw_ensemble_run_results(ensemble_predictions, run_metrics, configuration)
+    assert len(raw_runs) == 100
+    assert raw_runs["test_probabilities"].str.split(",").str.len().eq(46).all()
+    raw_lock = raw_ensemble_study_lock(configuration, Path("synthetic_metrics2026.xlsx"))
+    assert set(raw_lock["item"]).issuperset({"selected_pool", "selected_rule", "n_ensemble_runs"})
 
     with tempfile.TemporaryDirectory(prefix="r1_historic_workbook_") as temporary:
         temporary_path = Path(temporary)
@@ -214,7 +214,8 @@ def test_notebook_content() -> None:
     assert "10 configurations" in content
     assert "CV_WORKBOOK" in content
     assert "configuration_table" in content
-    assert "This notebook has not written a selection file" in content
+    assert "TOP3_MODELS" in content
+    assert "This notebook has not written a file" in content
     final_notebook = json.loads((REPO_ROOT / "notebooks" / "R1_final_ensemble_analysis.ipynb").read_text(encoding="utf-8"))
     final_content = "".join("".join(cell.get("source", [])) for cell in final_notebook["cells"])
     assert "metrics2026.xlsx" in final_content
@@ -222,6 +223,7 @@ def test_notebook_content() -> None:
     assert "TOP5_MODELS" in final_content
     assert "SELECTED_RULE" in final_content
     assert "RUN_ANALYSIS = False" in final_content
+    assert "R1_final_ensemble_raw_runs.xlsx" in final_content
 
 
 def main() -> None:

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create the version-controlled final historic-split ensemble analysis notebook."""
+"""Create the version-controlled final raw ensemble-run notebook."""
 from __future__ import annotations
 
 import json
@@ -18,25 +18,19 @@ def code(text: str) -> dict:
 
 
 cells = [
-    markdown("""# R1 final ensemble analysis — historic 61/31/46 split
+    markdown("""# R1 final ensemble runs — historic 61/31/46 split
 
-**Purpose:** This notebook applies **one already development-selected ensemble configuration** to the completed `metrics2026.xlsx` workbook. It reads the 100 historic-split test prediction runs for the selected constituent models and creates 100 **run-matched ensemble replicates**.
+**Purpose:** This notebook applies **one manually entered, development-selected ensemble configuration** to the completed `metrics2026.xlsx` workbook. It creates 100 run-matched ensemble runs and writes one simple raw Excel workbook.
 
-> **Boundary:** This notebook does not rank architectures, rank ensemble configurations, or select a winner from test results. Enter the Top-3/Top-5 lists and the one selected rule from the development-only selection notebook. Do not use this notebook to try alternative configurations on the 46-patient test cohort.
+> **Boundary:** This notebook does not rank architectures, rank ensemble configurations, calculate median summaries, calculate confidence intervals, or choose a test-set winner. Later paper reporting will combine this raw 100-run EL workbook with the 1,100 TL runs, 100 CNN runs, and the clinical-reader output.
 
-It reports both valid result types:
-
-1. **Stability:** median (IQR) across 100 run-matched ensemble replicates.
-2. **Patient-level performance:** for each of 46 test patients, the arithmetic mean of 100 ensemble probabilities, followed by bootstrap 95% confidence intervals.
+For seed 1, it takes seed-1 predictions from every selected constituent model and applies the selected rule. It repeats this for seeds 2–100. No model is retrained and no additional patients are used.
 """),
-    markdown("""## 0. Secure paths and manually entered, development-selected configuration
+    markdown("""## 0. Secure paths and manually entered configuration
 
-Set the secure workbook and output paths. Then enter the exact Top-3 list, Top-5 list, selected pool, and rule shown by the completed development-only selection notebook.
-
-The Top-3 list must be the first three names in the Top-5 list. This notebook validates that all named models exist in the completed 11×100 workbook and creates no test-set ranking.
+Copy the Top-3/Top-5 lists and selected pool/rule from the middle development-only notebook. The Top-3 list must be the first three entries of Top-5. The selected rule must be one of `sum`, `median`, `max`, `majority_vote`, or `weighted_sum`.
 """),
     code("""from pathlib import Path
-import json
 import sys
 import pandas as pd
 from IPython.display import display
@@ -55,20 +49,17 @@ if str(REPO_ROOT) not in sys.path:
 from analysis.r1_ensemble_core import (
     create_run_matched_ensemble_predictions,
     load_historic_tl_workbook,
-    patient_level_summary,
-    run_stability_summary,
+    raw_ensemble_run_results,
+    raw_ensemble_study_lock,
     validate_manual_configuration,
-    write_json,
 )
 
 # Secure local paths. These files must never be committed to Git.
 TL_WORKBOOK = REPO_ROOT / 'Experiment2026' / 'metrics2026.xlsx'
 ANALYSIS_OUTPUT_DIR = REPO_ROOT.parent / 'secure_analysis' / 'R1_final_ensemble_2026'
-OUTPUT_WORKBOOK = ANALYSIS_OUTPUT_DIR / 'R1_final_ensemble_results.xlsx'
-OUTPUT_CONFIGURATION_RECORD = ANALYSIS_OUTPUT_DIR / 'final_ensemble_configuration_record.json'
+OUTPUT_WORKBOOK = ANALYSIS_OUTPUT_DIR / 'R1_final_ensemble_raw_runs.xlsx'
 
-# Copy these exact lists from the completed development-only selection notebook.
-# Keep the CV ranking order: Top-3 must be the first three entries of Top-5.
+# Enter these names manually after reviewing the middle development-only notebook.
 TOP3_MODELS = [
     # 'Architecture_1',
     # 'Architecture_2',
@@ -81,17 +72,13 @@ TOP5_MODELS = [
     # 'Architecture_4',
     # 'Architecture_5',
 ]
-
-# Copy the one selected configuration from the development-only ranking.
 SELECTED_POOL = 'Top-5'      # 'Top-3' or 'Top-5'
 SELECTED_RULE = 'max'        # 'sum', 'median', 'max', 'majority_vote', or 'weighted_sum'
-# Only for SELECTED_RULE='weighted_sum': copy the development-OOF weights.
+# Only for SELECTED_RULE='weighted_sum': enter the development-only weights.
 WEIGHTED_SUM_WEIGHTS = {}
 
-# The final analysis is intentionally off until the configuration above is complete.
+# Keep False until the manually entered configuration above is complete.
 RUN_ANALYSIS = False
-BOOTSTRAP_ITERATIONS = 2000
-BOOTSTRAP_SEED = 20260929
 
 EXPECTED_MODELS = (
     'VGG16', 'VGG19', 'ResNet50', 'ResNet101', 'ResNet152', 'InceptionV3',
@@ -99,13 +86,13 @@ EXPECTED_MODELS = (
 )
 
 print('Historic 1,100-run workbook:', TL_WORKBOOK)
-print('Secure ensemble output directory:', ANALYSIS_OUTPUT_DIR)
+print('Raw ensemble output workbook:', OUTPUT_WORKBOOK)
 print('Selected pool/rule:', SELECTED_POOL, '/', SELECTED_RULE)
-print('This notebook evaluates exactly one manually entered, development-selected configuration.')
+print('This notebook runs one manually entered configuration only.')
 """),
     markdown("""## 1. Validate the manually entered configuration
 
-This validates only the configuration structure. It does not access test predictions.
+This checks the pool/rule structure only. It does not read test predictions.
 """),
     code("""configuration = validate_manual_configuration(
     top3_models=TOP3_MODELS,
@@ -116,96 +103,61 @@ This validates only the configuration structure. It does not access test predict
 )
 display(pd.DataFrame([configuration]))
 """),
-    markdown("""## 2. Read and validate the completed historic TL workbook
+    markdown("""## 2. Read the completed 1,100-run TL workbook
 
-The workbook must contain exactly 11 architectures × 100 seeds and 46 test probabilities per model/seed. The reader opens it read-only. The historic 61/31/46 allocation is retained so the ensemble is compared fairly with its constituent models and the reference CNN.
+The input must contain exactly 11 architectures × 100 seeds and 46 ordered test predictions per model/seed. It is opened read-only.
 """),
     code("""if not RUN_ANALYSIS:
-    print('Set RUN_ANALYSIS = True only after confirming the development-selected configuration above.')
+    print('Set RUN_ANALYSIS = True only after confirming the manual configuration above.')
 else:
     historic_predictions, test_manifest, study_lock = load_historic_tl_workbook(TL_WORKBOOK, EXPECTED_MODELS)
-    print(f'Validated {len(historic_predictions)} test-prediction records.')
+    print(f'Validated {len(historic_predictions)} prediction records.')
     print(f'Architectures: {historic_predictions.model_name.nunique()} | seeds: {historic_predictions.seed.nunique()} | test patients: {historic_predictions.patient_id.nunique()}')
-    display(study_lock)
 """),
-    markdown("""## 3. Create the 100 run-matched ensemble replicates
+    markdown("""## 3. Create the 100 run-matched ensemble runs
 
-For every seed from 1 to 100, this takes the same-numbered test prediction from each selected constituent model and applies the one selected rule. For example, seed 17 uses seed-17 predictions from every constituent model. No models are retrained and no additional training patients are introduced.
+Each ensemble seed uses only same-seed constituent predictions. This cell creates raw prediction and metric records for the 100 ensemble runs; it does not calculate any paper summaries.
 """),
     code("""if RUN_ANALYSIS:
     ensemble_predictions, ensemble_run_metrics = create_run_matched_ensemble_predictions(
         historic_predictions=historic_predictions,
         configuration=configuration,
     )
-    assert ensemble_predictions.seed.nunique() == 100
-    assert ensemble_predictions.patient_id.nunique() == 46
     assert len(ensemble_predictions) == 100 * 46
+    assert len(ensemble_run_metrics) == 100
     display(ensemble_run_metrics.head())
-    print('Created 100 run-matched ensemble replicates with 46 predictions each.')
+    print('Created 100 run-matched ensemble runs with 46 predictions per run.')
 """),
-    markdown("""## 4. Descriptive 100-run stability
+    markdown("""## 4. Write the raw EL workbook
 
-This reproduces the prior median (IQR) stability presentation. These 100 replicates describe stochastic-training variability; they are not independent clinical samples and are not used for run-level hypothesis testing.
-"""),
-    code("""if RUN_ANALYSIS:
-    ensemble_stability = run_stability_summary(ensemble_run_metrics)
-    display(ensemble_stability)
-"""),
-    markdown("""## 5. Patient-level final ensemble result with 95% confidence intervals
-
-For each independent test patient, this averages the 100 run-matched ensemble probabilities. This produces one final probability per patient before the fixed 0.50 threshold is applied. Bootstrap resampling is at the patient level.
-"""),
-    code("""if RUN_ANALYSIS:
-    ensemble_patient_predictions, ensemble_patient_metrics = patient_level_summary(
-        ensemble_predictions=ensemble_predictions,
-        bootstrap_iterations=BOOTSTRAP_ITERATIONS,
-        random_seed=BOOTSTRAP_SEED,
-    )
-    display(ensemble_patient_metrics)
-    display(ensemble_patient_predictions.head())
-"""),
-    markdown("""## 6. Write the secure final ensemble package
-
-This writes one human-readable Excel workbook and one JSON configuration record. The workbook contains the selected configuration, run-level stability record, all 4,600 run-matched ensemble predictions, the 46 patient-level mean probabilities, and patient-level confidence intervals.
+The workbook is intentionally simple. It contains only the raw ensemble runs, their ordered 46-patient probabilities, the test manifest, and a short provenance sheet. A later combined-analysis notebook will merge this with TL, CNN, and clinical-reader inputs for medians, patient-level 95% CIs, tables, and figures.
 """),
     code("""if RUN_ANALYSIS:
     ANALYSIS_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    configuration_record = {
-        'analysis_scope': 'one development-selected ensemble configuration evaluated on historic 61/31/46 test predictions',
-        'test_configuration_selection_performed': False,
-        'configuration': configuration,
-        'input_workbook': str(TL_WORKBOOK),
-        'n_historic_tl_runs': 1100,
-        'n_ensemble_replicates': 100,
-        'n_test_patients': 46,
-        'seed_matching': 'same seed across every selected constituent model',
-        'patient_level_aggregation': 'mean probability across 100 run-matched ensemble replicates',
-        'classification_threshold': 0.50,
-        'bootstrap_iterations': BOOTSTRAP_ITERATIONS,
-        'bootstrap_seed': BOOTSTRAP_SEED,
-    }
-    write_json(OUTPUT_CONFIGURATION_RECORD, configuration_record)
+    raw_run_results = raw_ensemble_run_results(
+        ensemble_predictions=ensemble_predictions,
+        ensemble_run_metrics=ensemble_run_metrics,
+        configuration=configuration,
+    )
+    raw_lock = raw_ensemble_study_lock(configuration, TL_WORKBOOK)
     with pd.ExcelWriter(OUTPUT_WORKBOOK, engine='openpyxl', mode='w') as writer:
-        pd.DataFrame([configuration_record]).to_excel(writer, sheet_name='Study_lock', index=False)
-        pd.DataFrame([configuration]).to_excel(writer, sheet_name='Selected_configuration', index=False)
-        ensemble_run_metrics.to_excel(writer, sheet_name='Ensemble_run_metrics', index=False)
-        ensemble_stability.to_excel(writer, sheet_name='Ensemble_stability', index=False)
-        ensemble_predictions.to_excel(writer, sheet_name='Ensemble_predictions_100', index=False)
-        ensemble_patient_predictions.to_excel(writer, sheet_name='Patient_predictions', index=False)
-        ensemble_patient_metrics.to_excel(writer, sheet_name='Patient_level_results', index=False)
-        test_manifest.to_excel(writer, sheet_name='Test_manifest', index=False)
-    print('Wrote secure final ensemble workbook:', OUTPUT_WORKBOOK)
-    print('Wrote secure configuration record:', OUTPUT_CONFIGURATION_RECORD)
+        raw_run_results.to_excel(writer, sheet_name='Run_results', index=False)
+        test_manifest.to_excel(writer, sheet_name='Patient_manifest', index=False)
+        raw_lock.to_excel(writer, sheet_name='Study_lock', index=False)
+    print('Wrote raw 100-run ensemble workbook:', OUTPUT_WORKBOOK)
+    print('Sheets: Run_results | Patient_manifest | Study_lock')
 """),
-    markdown("""## Deliverables
+    markdown("""## Raw output
 
 ```text
 secure_analysis/R1_final_ensemble_2026/
-├── R1_final_ensemble_results.xlsx
-└── final_ensemble_configuration_record.json
+└── R1_final_ensemble_raw_runs.xlsx
+    ├── Run_results       # 100 raw ensemble runs with metrics and 46 ordered probabilities
+    ├── Patient_manifest  # test-patient order and labels
+    └── Study_lock        # manually entered pool/rule and seed-matching provenance
 ```
 
-The next results-integration notebook can combine the final ensemble output with the 11-model TL patient-level outputs, reference-CNN/clinical-reader data, and conventional baseline workbook. It must not recreate or select alternative ensemble configurations on the independent test cohort.
+This is the EL input for the later combined reporting notebook. It will be combined with the original 1,100 TL runs, 100 CNN runs, and the clinical reader—not used to select any further ensemble configuration.
 """),
 ]
 

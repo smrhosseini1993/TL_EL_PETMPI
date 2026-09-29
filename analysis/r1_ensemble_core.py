@@ -458,6 +458,81 @@ def run_stability_summary(run_metrics: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame([row])
 
 
+def raw_ensemble_run_results(
+    ensemble_predictions: pd.DataFrame,
+    ensemble_run_metrics: pd.DataFrame,
+    configuration: Mapping[str, Any],
+) -> pd.DataFrame:
+    """Create one raw run row per ensemble seed for later combined reporting.
+
+    This deliberately does not calculate medians, confidence intervals, or tests.
+    It mirrors the run-level structure of the historic TL workbook: each row holds
+    one seed's metrics and its full-precision ordered 46-patient probabilities.
+    """
+    expected_prediction_columns = {"seed", "within_split_order", "probability", "binary_prediction"}
+    expected_metric_columns = {"seed", "accuracy", "precision", "sensitivity", "specificity", "f1", "auc", "tn", "fp", "fn", "tp"}
+    if not expected_prediction_columns.issubset(ensemble_predictions.columns):
+        raise ValueError("Ensemble predictions lack columns required for raw workbook output")
+    if not expected_metric_columns.issubset(ensemble_run_metrics.columns):
+        raise ValueError("Ensemble run metrics lack columns required for raw workbook output")
+    rows: List[Dict[str, Any]] = []
+    selected_models = ";".join(str(name) for name in configuration["selected_models"])
+    for metrics in ensemble_run_metrics.sort_values("seed").itertuples(index=False):
+        values = metrics._asdict()
+        seed = int(values["seed"])
+        predictions = ensemble_predictions.loc[ensemble_predictions["seed"].astype(int) == seed].sort_values("within_split_order")
+        if len(predictions) != 46 or predictions["within_split_order"].tolist() != list(range(1, 47)):
+            raise ValueError("Each raw ensemble run must contain 46 ordered test predictions")
+        probabilities = predictions["probability"].to_numpy(dtype=float)
+        binary = predictions["binary_prediction"].to_numpy(dtype=int)
+        rows.append({
+            "model_name": "Ensemble",
+            "seed": seed,
+            "pool_name": str(configuration["selected_pool"]),
+            "rule_id": str(configuration["selected_rule"]),
+            "rule_name": str(configuration["selected_rule_name"]),
+            "constituent_models": selected_models,
+            "weighted_sum_weights": json.dumps(configuration.get("weighted_sum_weights", {}), sort_keys=True),
+            "threshold": 0.50,
+            "test_accuracy": float(values["accuracy"]),
+            "test_precision": float(values["precision"]),
+            "test_sensitivity": float(values["sensitivity"]),
+            "test_specificity": float(values["specificity"]),
+            "test_f1": float(values["f1"]),
+            "test_auc": float(values["auc"]),
+            "test_tn": int(values["tn"]),
+            "test_fp": int(values["fp"]),
+            "test_fn": int(values["fn"]),
+            "test_tp": int(values["tp"]),
+            "test_probabilities": ",".join(format(float(value), ".17g") for value in probabilities),
+            "test_binary_predictions": ",".join(str(int(value)) for value in binary),
+        })
+    result = pd.DataFrame(rows).sort_values("seed").reset_index(drop=True)
+    if len(result) != 100 or set(result["seed"]) != set(range(1, 101)):
+        raise RuntimeError("Raw ensemble workbook must contain exactly one row for seeds 1-100")
+    return result
+
+
+def raw_ensemble_study_lock(configuration: Mapping[str, Any], input_workbook: Path) -> pd.DataFrame:
+    """Create the compact provenance sheet for the raw ensemble workbook."""
+    rows = [
+        ("study", "EJPH-D-26-00179 final ensemble raw 100-run output"),
+        ("input_workbook", str(input_workbook)),
+        ("input_design", "Completed historic 61/31/46 transfer-learning workbook: 11 architectures x 100 seeds"),
+        ("test_configuration_selection_performed", "false"),
+        ("selected_pool", str(configuration["selected_pool"])),
+        ("selected_rule", str(configuration["selected_rule"])),
+        ("constituent_models", ";".join(str(name) for name in configuration["selected_models"])),
+        ("weighted_sum_weights", json.dumps(configuration.get("weighted_sum_weights", {}), sort_keys=True)),
+        ("threshold", "0.50"),
+        ("seed_matching", "same seed across every selected constituent model"),
+        ("n_ensemble_runs", "100"),
+        ("n_test_patients_per_run", "46"),
+        ("output_scope", "Raw 100-run ensemble results only; later combined analysis performs stability and patient-level reporting"),
+    ]
+    return pd.DataFrame(rows, columns=["item", "value"])
+
+
 def patient_level_summary(ensemble_predictions: pd.DataFrame, bootstrap_iterations: int = 2000, random_seed: int = 20260929) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """Mean 100 replicates per patient and calculate patient-level bootstrap CIs."""
     required = {"patient_id", "observed_label", "seed", "probability"}

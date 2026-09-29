@@ -57,5 +57,5 @@ printf 'Output directory: %s\n' "${OUTPUT_DIR}"
 if [[ "${RUN_STAGE}" == "preflight" ]]; then
   printf '%s\n' 'This preflight is only a technical check. Run the full stage in a new output directory before opening the ensemble-selection notebook.'
 else
-  printf '%s\n' 'Use oof_predictions_all.csv and cv_run_manifest.json from this full output directory in the ensemble-selection notebook.'
+  printf '%s\n' 'Use ensemble_selection_cv_raw_results.xlsx from this full output directory in the ensemble-selection notebook.'
 fi
