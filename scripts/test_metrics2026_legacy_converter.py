@@ -14,7 +14,13 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from analysis.metrics2026_legacy_converter import EXPECTED_MODELS, LEGACY_COLUMNS, convert_metrics2026_to_legacy
+from analysis.metrics2026_legacy_converter import (
+    EXPECTED_MODELS,
+    LEGACY_COLUMNS,
+    REFERENCE_CNN_MODEL,
+    convert_metrics2026_to_legacy,
+    convert_reference_cnn_metrics2026_to_legacy,
+)
 
 
 def sha256(path: Path) -> str:
@@ -76,6 +82,36 @@ def build_source_workbook(path: Path) -> None:
         pd.DataFrame([{"item": "synthetic", "value": "test"}]).to_excel(writer, sheet_name="Study_lock", index=False)
 
 
+def build_reference_cnn_source_workbook(path: Path) -> None:
+    labels = {
+        "train": np.asarray([0] * 36 + [1] * 25),
+        "validation": np.asarray([0] * 20 + [1] * 11),
+        "test": np.asarray([0] * 26 + [1] * 20),
+    }
+    rows = []
+    for seed in range(1, 101):
+        row = {
+            "model_name": REFERENCE_CNN_MODEL, "seed": seed, "elapsed_seconds": 1.25,
+            "input_size": 256, "batch_size": 20, "optimizer": "SGD",
+            "class_weights_enabled": True,
+            "phase1_requested_epochs": 35, "phase2_requested_epochs": 0, "phase3_requested_epochs": 0,
+        }
+        for split, values in labels.items():
+            row.update({"{0}_{1}".format(split, key): value for key, value in metric_values(values).items()})
+        rows.append(row)
+    manifest_rows = []
+    for split, values in labels.items():
+        for order, label in enumerate(values, start=1):
+            manifest_rows.append({
+                "split": split, "within_split_order": order,
+                "file_name": "{0}_{1:03d}.jpg".format(split, order), "observed_label": int(label),
+            })
+    with pd.ExcelWriter(path, engine="openpyxl", mode="w") as writer:
+        pd.DataFrame(rows).to_excel(writer, sheet_name="Run_results", index=False)
+        pd.DataFrame(manifest_rows).to_excel(writer, sheet_name="Patient_manifest", index=False)
+        pd.DataFrame([{"item": "synthetic", "value": "reference-cnn-test"}]).to_excel(writer, sheet_name="Study_lock", index=False)
+
+
 def main() -> None:
     with tempfile.TemporaryDirectory(prefix="metrics2026_legacy_converter_") as temporary:
         directory = Path(temporary)
@@ -98,6 +134,21 @@ def main() -> None:
         assert len(sheets["sheet1"]) == 1100
         assert tuple(sheets["sheet1"].columns) == LEGACY_COLUMNS
         assert "statistical_boundary" in set(sheets["Conversion_lock"]["item"])
+
+        cnn_source = directory / "CNN_metrics2026.xlsx"
+        cnn_output = directory / "CNN_metrics2026_legacy_compatible.xlsx"
+        build_reference_cnn_source_workbook(cnn_source)
+        cnn_before = sha256(cnn_source)
+        cnn_converted = convert_reference_cnn_metrics2026_to_legacy(cnn_source, cnn_output)
+        assert cnn_before == sha256(cnn_source), "Reference-CNN source workbook was modified"
+        assert len(cnn_converted) == 100
+        assert tuple(cnn_converted.columns) == LEGACY_COLUMNS
+        assert set(cnn_converted["model_name"].astype(str)) == {REFERENCE_CNN_MODEL}
+        assert cnn_converted["freeze_fe"].eq(False).all()
+        assert cnn_converted["tag"].astype(str).tolist() == [str(seed) for seed in range(1, 101)]
+        cnn_sheets = pd.read_excel(cnn_output, sheet_name=None, engine="openpyxl")
+        assert set(cnn_sheets) == {"sheet1", "Conversion_lock"}
+        assert len(cnn_sheets["sheet1"]) == 100
     print("metrics2026 legacy-compatibility converter test passed.")
 
 

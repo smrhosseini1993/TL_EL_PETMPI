@@ -26,6 +26,8 @@ The current `r1/tl-reanalysis` branch implements the revised TL workflow and the
 | `notebooks/R1_ensemble_configuration_selection.ipynb` | Reads only the raw final-protocol CV workbook, displays the 11-model development ranking, accepts manually entered Top-3/Top-5 pools, then displays the 10 candidate configurations. It writes no output and never reads historic test predictions. |
 | `notebooks/R1_final_ensemble_analysis.ipynb` | Reads the completed historic `metrics2026.xlsx` workbook and one manually entered development-selected pool/rule. It creates one raw 100-run ensemble workbook for later combined reporting. It never ranks alternative configurations on the test cohort. |
 | `notebooks/convert_metrics2026_to_legacy.ipynb` | Creates a separate old-layout `metrics_legacy_compatible.xlsx` from the final 1,100-run `metrics2026.xlsx`, for legacy plotting-cell compatibility only. It never modifies the audited source workbook. |
+| `Experiment2026/reference_cnn2026.py` | Retained four-convolution reference-CNN runner based on the supplied historical AUC/ACC implementations. It preserves their architecture, 256×256 resize path, 35-epoch SGD protocol, class weights, and 92-patient `validation_split=1/3` fit behavior while writing a secure 100-seed `CNN_metrics2026.xlsx` workbook with full-precision patient predictions. |
+| `Experiment2026/run_reference_cnn2026.sh` | Resumable launcher for reference-CNN seeds 1–100. |
 | `notebooks/results_publish.ipynb` | The single paper-order reporting notebook. It validates the final TL, selected raw ensemble, conventional baseline, and optional CNN/clinical-reader inputs; then writes Tables T1–T4 and ST1–ST4, Figures F1–F3 and SF1, paired patient-level statistics, captions, and a provenance manifest. |
 
 ### Locked R1 protocol
@@ -140,6 +142,32 @@ For the historic-split final ensemble result, open `notebooks/R1_final_ensemble_
 ### Legacy plotting compatibility
 
 `notebooks/convert_metrics2026_to_legacy.ipynb` can create a separate `metrics_legacy_compatible.xlsx` workbook from the final `metrics2026.xlsx`. Its `sheet1` has the legacy metrics column names and four-decimal prediction text so old plotting cells can be adapted quickly. The source workbook is read-only and remains the auditable master dataset. Do not use the compatibility output to revive any legacy best-run, test-set-selection, Borda-count, or run-level inferential workflow.
+
+The same notebook accepts `SOURCE_TYPE = 'reference_cnn'` to create a separate `CNN_metrics2026_legacy_compatible.xlsx` from the 100-seed reference-CNN master workbook. The source CNN workbook remains read-only; use the master workbook for patient-level reporting.
+
+### Retained reference-CNN rerun
+
+The original supplied AUC and ACC scripts have the same four-convolution architecture and identical training protocol. They differ only in the Keras metric displayed while fitting; neither metric controls early stopping or seed selection. `Experiment2026/reference_cnn2026.py` preserves the common source protocol while recording both post-fit AUC and accuracy in `CNN_metrics2026.xlsx`.
+
+Run the structural preflight first:
+
+```bash
+python Experiment2026/reference_cnn2026.py \
+  --root /secure/path/dataparent \
+  --output-file /secure/path/CNN_metrics2026.xlsx \
+  --seed 1 \
+  --dry-run
+```
+
+Then run all prespecified seeds in tmux:
+
+```bash
+ROOT_DIR=/secure/path/dataparent \
+OUTPUT_FILE=/secure/path/CNN_metrics2026.xlsx \
+bash Experiment2026/run_reference_cnn2026.sh
+```
+
+The result has the same three-sheet master-workbook design as `metrics2026.xlsx`: `Run_results`, `Patient_manifest`, and `Study_lock`. It contains one retained reference-CNN architecture × 100 prespecified seeds, full-precision ordered probabilities, and all train/validation/test metrics. It is directly accepted by `notebooks/results_publish.ipynb` as `CNN_metrics2026.xlsx`.
 
 ### Paper-order reporting package
 

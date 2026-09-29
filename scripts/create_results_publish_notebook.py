@@ -37,7 +37,7 @@ PETMPI_R1_final_analysis/
     ├── metrics2026.xlsx          # final 11 × 100 TL output
     ├── baseline_metrics2026.xlsx # six conventional baselines
     ├── R1_final_ensemble_raw_runs.xlsx
-    ├── reference_cnn_runs.xlsx   # old 100 CNN runs, one CNN method only
+    ├── CNN_metrics2026.xlsx      # retained four-convolution CNN, 100 seeds
     └── clinical_reader.xlsx      # optional; 46 rows if available
 ```
 
@@ -72,7 +72,7 @@ BASELINE_WORKBOOK = INPUT_DIR / 'baseline_metrics2026.xlsx'
 ENSEMBLE_WORKBOOK = INPUT_DIR / 'R1_final_ensemble_raw_runs.xlsx'
 
 # Add the filenames after copying these inputs. Set to None only while unavailable.
-REFERENCE_CNN_WORKBOOK = INPUT_DIR / 'reference_cnn_runs.xlsx'
+REFERENCE_CNN_WORKBOOK = INPUT_DIR / 'CNN_metrics2026.xlsx'
 CLINICAL_READER_FILE = None  # e.g., INPUT_DIR / 'clinical_reader.xlsx'
 
 # These two prespecified conventional quantitative PET models appear in Table T3/T4 and F3.

@@ -109,8 +109,14 @@ def build_cnn_workbook(path: Path, labels: np.ndarray) -> None:
     rows = []
     for seed in range(1, 101):
         probability = np.clip(np.where(labels == 1, 0.76, 0.24) + (seed % 7) * 0.0001, 0.01, 0.99)
-        rows.append({"model_name": "CNN", "tag": seed, "predicts": ",".join(format(float(value), ".17g") for value in probability)})
-    pd.DataFrame(rows).to_excel(path, sheet_name="sheet1", index=False)
+        rows.append({
+            "model_name": "ReferenceCNN_4Conv_v2_55", "seed": seed,
+            "test_probabilities": ",".join(format(float(value), ".17g") for value in probability),
+        })
+    with pd.ExcelWriter(path, engine="openpyxl", mode="w") as writer:
+        pd.DataFrame(rows).to_excel(writer, sheet_name="Run_results", index=False)
+        test_manifest(labels).to_excel(writer, sheet_name="Patient_manifest", index=False)
+        pd.DataFrame([{"item": "fixture", "value": "reference-cnn-test"}]).to_excel(writer, sheet_name="Study_lock", index=False)
 
 
 def test_complete_reporting_package() -> None:
