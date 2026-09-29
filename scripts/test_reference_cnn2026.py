@@ -37,6 +37,10 @@ def create_secure_root(root: Path) -> None:
 
 
 def test_model_and_metrics() -> None:
+    cnn.set_legacy_source_random_state()
+    observed = float(np.random.random())
+    np.random.seed(1)
+    assert observed == float(np.random.random())
     model = cnn.make_model(cnn.INPUT_SIZE)
     assert int(model.count_params()) == 124289
     cnn.compile_model(model)
@@ -45,6 +49,7 @@ def test_model_and_metrics() -> None:
     assert values["auc"] == 1.0
     assert values["probabilities"].count(",") == 3
     assert values["binary_predictions"] == "0,0,1,1"
+    assert cnn.binary_csv([0.50, 0.5000001]) == "0,1"
 
 
 def test_dry_run_and_workbook_integrity() -> None:

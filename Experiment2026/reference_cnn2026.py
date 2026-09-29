@@ -7,7 +7,8 @@ reference implementations.  Those source files differ only in the metric display
 while fitting; neither uses that metric for early stopping or model selection.
 
 Intentional 2026 output changes:
-* one explicit seed per run (1--100) rather than an implicit process-level seed;
+* one indexed repeat per run (1--100), while retaining Jarmo's fixed NumPy/TensorFlow
+  source random states for every repeat;
 * full-precision ordered train/validation/test probabilities in one audited workbook;
 * separate 61-patient train and 31-patient validation metrics, while retaining the
   source code's ``validation_split=1/3`` fit behaviour; and
@@ -19,8 +20,6 @@ from __future__ import print_function
 
 import argparse
 import gc
-import os
-import random
 import time
 from copy import copy
 from pathlib import Path
@@ -60,7 +59,7 @@ def parse_args() -> argparse.Namespace:
         "--output-file", type=Path, default=DEFAULT_OUTPUT_FILE,
         help="Secure local workbook written by this runner (default: CNN_metrics2026.xlsx)."
     )
-    parser.add_argument("--seed", type=int, required=True, help="Prespecified integer seed for one reference-CNN run.")
+    parser.add_argument("--seed", type=int, required=True, help="Indexed repeat identifier (1-100) for one reference-CNN run.")
     parser.add_argument("--input-size", type=int, default=INPUT_SIZE, help="Locked source-code resize dimension (256).")
     parser.add_argument("--batch-size", type=int, default=BATCH_SIZE, help="Locked source-code mini-batch size (20).")
     parser.add_argument("--epochs", type=int, default=EPOCHS, help="Locked source-code epoch limit (35).")
@@ -69,16 +68,16 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def set_seed(seed: int) -> None:
-    """Set every controllable random source once per run."""
-    os.environ["PYTHONHASHSEED"] = str(seed)
-    random.seed(seed)
-    np.random.seed(seed)
-    tf.random.set_seed(seed)
-    try:
-        tf.keras.utils.set_random_seed(seed)
-    except AttributeError:
-        pass
+def set_legacy_source_random_state() -> None:
+    """Retain the literal effective random-state calls in Jarmo's source code.
+
+    The original calls ``np.random.seed()`` and then immediately ``seed(1)``,
+    so the first call has no effect on the final NumPy state. It then calls
+    ``tf.set_random_seed(2)``. The indexed output ``seed`` is a run identifier,
+    not a replacement model-initialisation seed.
+    """
+    np.random.seed(1)
+    tf.random.set_seed(2)
 
 
 def load_binary_labels(path: Path) -> np.ndarray:
@@ -135,14 +134,18 @@ def read_split_paths_and_labels(root: Path) -> Dict[str, Dict[str, Any]]:
 def _load_one_legacy_image(path: Path, input_size: int) -> np.ndarray:
     """Retain the source's skimage resize -> uint8 -> divide-by-255 sequence."""
     with Image.open(str(path)) as image:
-        source = np.asarray(image.convert("RGB"))
+        source = np.asarray(image)
     resized = resize(source, (input_size, input_size, 3))
     requantized = (255.0 * resized).astype(np.uint8)
-    return requantized.astype(np.float32) / 255.0
+    # Keeping the uint8/int division also retains the source code's float64
+    # NumPy array before Keras performs its standard input cast.
+    return requantized / 255
 
 
 def load_images(paths: Sequence[Path], input_size: int) -> np.ndarray:
-    images = np.asarray([_load_one_legacy_image(path, input_size) for path in paths], dtype=np.float32)
+    # Do not specify a dtype: Jarmo's ``uint8 / 255`` path yielded a float64
+    # NumPy input array before Keras' normal input casting.
+    images = np.asarray([_load_one_legacy_image(path, input_size) for path in paths])
     expected_shape = (len(paths), input_size, input_size, 3)
     if images.shape != expected_shape:
         raise RuntimeError("Unexpected loaded image shape: expected {0}, observed {1}.".format(expected_shape, images.shape))
@@ -189,15 +192,14 @@ def full_precision_csv(values: Sequence[float]) -> str:
 
 
 def binary_csv(probabilities: Sequence[float]) -> str:
-    return ",".join(str(int(np.round(float(value)))) for value in probabilities)
+    return ",".join(str(int(float(value) > 0.50)) for value in probabilities)
 
 
 def calculate_metrics(labels: Sequence[int], probabilities: Sequence[float]) -> Dict[str, Any]:
     y_true = np.asarray(labels, dtype=int).reshape(-1)
     y_probability = np.asarray(probabilities, dtype=float).reshape(-1)
-    # The source code used model.predict_classes, which applies a 0.50 sigmoid threshold.
-    # np.round retains the exact threshold implementation used by Experiment2026.
-    y_prediction = np.round(y_probability).astype(int)
+    # Keras' source-era predict_classes implementation used ``probability > 0.5``.
+    y_prediction = (y_probability > 0.50).astype(int)
     tn, fp, fn, tp = confusion_matrix(y_true, y_prediction, labels=[0, 1]).ravel()
     return {
         "accuracy": float(accuracy_score(y_true, y_prediction)),
@@ -239,7 +241,7 @@ def study_lock_rows() -> pd.DataFrame:
         ("split", "Historic alphabetical fixed split: first 61 development patients=train; next 31=validation; separate 46=test"),
         ("split_class_counts", "train: 36 label-0 / 25 label-1; validation: 20 / 11; test: 26 / 20"),
         ("input", "256 x 256 x 3 RGB JPEG; source code uses int(1024/4)"),
-        ("image_processing", "Legacy skimage resize -> multiply by 255 -> uint8 -> divide by 255"),
+        ("image_processing", "Literal source path: np.array(Image.open) -> skimage resize -> multiply by 255 -> uint8 -> divide by 255"),
         ("architecture", "Conv2D(12, 3x3, stride 2, ReLU) -> MaxPool -> Conv2D(16, 3x3, stride 2, ReLU) -> MaxPool -> Conv2D(32, 3x3, stride 2, ReLU) -> MaxPool -> Conv2D(64, 3x3, stride 2, ReLU, L2=0.1) -> MaxPool -> Flatten -> Dense(512, ReLU) -> Dense(128, ReLU) -> sigmoid"),
         ("total_parameters", "124289 for the locked 256 x 256 source architecture"),
         ("optimizer", "SGD: learning_rate=0.005, inverse-time decay=1e-8 per optimizer update, momentum=0.9"),
@@ -248,10 +250,10 @@ def study_lock_rows() -> pd.DataFrame:
         ("loss", "binary cross-entropy"),
         ("class_weights", "Literal source weights: label-0=1, label-1=3"),
         ("fit_validation", "Literal source behavior: model.fit on 92 development images with validation_split=1/3; first 61 rows fit, final 31 rows validate; training rows shuffled by Keras each epoch"),
-        ("threshold", "Legacy 0.50 sigmoid threshold; output uses np.round(probability) to match Experiment2026 storage"),
-        ("seed", "Each Run_results row contains one prespecified seed applied to Python, NumPy, and TensorFlow"),
+        ("threshold", "Literal source-era Keras predict_classes threshold: probability >0.50"),
+        ("run_identifier", "Run_results seed values 1-100 identify repeat executions only; literal source random states NumPy=1 and TensorFlow=2 are reset for every run"),
         ("probability_storage", "Full-precision comma-separated train/validation/test probabilities stored once per run; Patient_manifest fixes within-split order"),
-        ("analysis_scope", "100 seed rows describe stochastic-training stability only. Patient-level analysis must aggregate probabilities by patient across seeds; no best-seed selection or run-level inference is permitted."),
+        ("analysis_scope", "100 indexed repeat rows describe run-to-run behavior only. Patient-level analysis must aggregate probabilities by patient across repeat rows; no best-run selection or run-level inference is permitted."),
     ]
     return pd.DataFrame(rows, columns=["item", "value"])
 
@@ -336,8 +338,8 @@ def main() -> None:
         print("Skipping completed reference-CNN seed {0}.".format(args.seed))
         return
 
-    set_seed(args.seed)
     tf.keras.backend.clear_session()
+    set_legacy_source_random_state()
     development_images = load_images(split_data["development"]["paths"], args.input_size)
     test_images = load_images(split_data["test"]["paths"], args.input_size)
     development_labels = np.asarray(split_data["development"]["labels"], dtype=np.int64)

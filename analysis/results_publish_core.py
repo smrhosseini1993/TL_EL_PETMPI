@@ -260,6 +260,8 @@ def load_reference_cnn_runs(workbook: Path, reference_manifest: pd.DataFrame, se
     Accepts the original one-sheet metrics layout or a workbook with a `Run_results`
     sheet. It needs an ordered 46-value probability column named one of `predicts`,
     `test_predicts`, or `test_probabilities` and optional `tag`/`seed` run IDs.
+    Its binary predictions retain the source CNN's strict ``probability > 0.50``
+    convention rather than the general ``>= 0.50`` reporting convention.
     """
     if not workbook.exists():
         raise FileNotFoundError("Reference CNN workbook not found: {0}".format(workbook))
@@ -288,7 +290,7 @@ def load_reference_cnn_runs(workbook: Path, reference_manifest: pd.DataFrame, se
                 "method_id": "Reference CNN", "method_label": "Reference CNN", "method_type": "reference_cnn",
                 "patient_id": manifest_row.patient_id, "within_split_order": int(manifest_row.within_split_order),
                 "observed_label": int(manifest_row.observed_label), "seed": seed, "probability": float(probability),
-                "score": float(probability), "binary_prediction": int(float(probability) >= settings.threshold),
+                "score": float(probability), "binary_prediction": int(float(probability) > settings.threshold),
                 "probability_available": True,
             })
     long = pd.DataFrame(rows)

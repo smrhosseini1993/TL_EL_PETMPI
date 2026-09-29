@@ -142,6 +142,7 @@ def test_complete_reporting_package() -> None:
         assert len(sources.ensemble_patient_predictions) == 46
         assert len(sources.baseline_patient_predictions) == 6 * 46
         assert len(sources.reference_cnn_patient_predictions) == 46
+        assert sources.reference_cnn_patient_predictions["binary_prediction"].isin([0, 1]).all()
         output = root / "output"
         tables = run_results_publish(sources, output, settings)
         assert {"T1_TL_performance", "T2_TL_confusion", "T3_principal_comparison", "T4_principal_confusion", "ST1_all_conventional", "ST2_TL_seed_stability", "ST3_paired_comparisons", "ST4_calibration"}.issubset(tables)
