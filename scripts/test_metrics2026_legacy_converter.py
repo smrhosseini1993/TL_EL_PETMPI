@@ -20,6 +20,7 @@ from analysis.metrics2026_legacy_converter import (
     REFERENCE_CNN_MODEL,
     convert_metrics2026_to_legacy,
     convert_reference_cnn_metrics2026_to_legacy,
+    read_and_validate_reference_cnn_metrics2026,
 )
 
 
@@ -109,7 +110,10 @@ def build_reference_cnn_source_workbook(path: Path) -> None:
     with pd.ExcelWriter(path, engine="openpyxl", mode="w") as writer:
         pd.DataFrame(rows).to_excel(writer, sheet_name="Run_results", index=False)
         pd.DataFrame(manifest_rows).to_excel(writer, sheet_name="Patient_manifest", index=False)
-        pd.DataFrame([{"item": "synthetic", "value": "reference-cnn-test"}]).to_excel(writer, sheet_name="Study_lock", index=False)
+        pd.DataFrame([
+            {"item": "synthetic", "value": "reference-cnn-test"},
+            {"item": "random_seed_policy", "value": "seed_varied_1_to_100"},
+        ]).to_excel(writer, sheet_name="Study_lock", index=False)
 
 
 def main() -> None:
@@ -149,6 +153,16 @@ def main() -> None:
         cnn_sheets = pd.read_excel(cnn_output, sheet_name=None, engine="openpyxl")
         assert set(cnn_sheets) == {"sheet1", "Conversion_lock"}
         assert len(cnn_sheets["sheet1"]) == 100
+
+        fixed_seed_audit = directory / "CNN_fixed_seed_audit.xlsx"
+        build_reference_cnn_source_workbook(fixed_seed_audit)
+        with pd.ExcelWriter(fixed_seed_audit, engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:
+            pd.DataFrame([{"item": "random_seed_policy", "value": "fixed_source_constants"}]).to_excel(writer, sheet_name="Study_lock", index=False)
+        try:
+            read_and_validate_reference_cnn_metrics2026(fixed_seed_audit)
+            raise AssertionError("Fixed-seed CNN audit workbook was accepted")
+        except ValueError as error:
+            assert "fixed-seed audit" in str(error)
     print("metrics2026 legacy-compatibility converter test passed.")
 
 

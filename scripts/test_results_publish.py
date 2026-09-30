@@ -116,7 +116,10 @@ def build_cnn_workbook(path: Path, labels: np.ndarray) -> None:
     with pd.ExcelWriter(path, engine="openpyxl", mode="w") as writer:
         pd.DataFrame(rows).to_excel(writer, sheet_name="Run_results", index=False)
         test_manifest(labels).to_excel(writer, sheet_name="Patient_manifest", index=False)
-        pd.DataFrame([{"item": "fixture", "value": "reference-cnn-test"}]).to_excel(writer, sheet_name="Study_lock", index=False)
+        pd.DataFrame([
+            {"item": "fixture", "value": "reference-cnn-test"},
+            {"item": "random_seed_policy", "value": "seed_varied_1_to_100"},
+        ]).to_excel(writer, sheet_name="Study_lock", index=False)
 
 
 def test_complete_reporting_package() -> None:

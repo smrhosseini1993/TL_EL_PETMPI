@@ -257,8 +257,11 @@ def load_baseline_predictions(workbook: Path, reference_manifest: pd.DataFrame) 
 def load_reference_cnn_runs(workbook: Path, reference_manifest: pd.DataFrame, settings: ReportingSettings) -> pd.DataFrame:
     """Read a legacy-style 100-run reference-CNN workbook into patient-level predictions.
 
-    Accepts the original one-sheet metrics layout or a workbook with a `Run_results`
-    sheet. It needs an ordered 46-value probability column named one of `predicts`,
+    Accepts an old one-sheet legacy workbook or the current seed-varied workbook
+    with a `Run_results` sheet. A current workbook must record
+    ``random_seed_policy=seed_varied_1_to_100`` in `Study_lock`; this prevents a
+    fixed-seed audit workbook from being used as a 100-run paper comparator.
+    It needs an ordered 46-value probability column named one of `predicts`,
     `test_predicts`, or `test_probabilities` and optional `tag`/`seed` run IDs.
     Its binary predictions retain the source CNN's strict ``probability > 0.50``
     convention rather than the general ``>= 0.50`` reporting convention.
@@ -268,6 +271,14 @@ def load_reference_cnn_runs(workbook: Path, reference_manifest: pd.DataFrame, se
     sheets = pd.read_excel(str(workbook), sheet_name=None, engine="openpyxl")
     if "Run_results" in sheets:
         runs = sheets["Run_results"].copy()
+        if "Study_lock" not in sheets or not {"item", "value"}.issubset(sheets["Study_lock"].columns):
+            raise ValueError("Current Reference CNN workbook requires Study_lock item/value provenance")
+        lock_values = dict(zip(sheets["Study_lock"]["item"].astype(str), sheets["Study_lock"]["value"].astype(str)))
+        if lock_values.get("random_seed_policy") != "seed_varied_1_to_100":
+            raise ValueError(
+                "Reference CNN workbook is not the required seed-varied 1-100 analysis. "
+                "Fixed-seed audit repeats cannot be used for final paper reporting."
+            )
     elif "sheet1" in sheets:
         runs = sheets["sheet1"].copy()
     else:

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run the retained four-convolution reference CNN for indexed repeats 1-100.
+# Run the seed-varied four-convolution reference-CNN reanalysis for seeds 1-100.
 # This launcher writes exactly one secure local workbook: CNN_metrics2026.xlsx.
 # Run it in the existing polarmaps2024 TensorFlow environment, preferably in tmux.
 
@@ -17,10 +17,10 @@ if [[ "${START_SEED}" -lt 1 || "${END_SEED}" -gt 100 || "${START_SEED}" -gt "${E
   exit 2
 fi
 
-printf '2026 retained reference-CNN rerun\n'
+printf '2026 seed-varied reference-CNN reanalysis\n'
 printf 'Data root: %s\n' "${ROOT_DIR}"
 printf 'One output workbook: %s\n' "${OUTPUT_FILE}"
-printf 'Repeat identifiers: %s-%s\n' "${START_SEED}" "${END_SEED}"
+printf 'Random seeds: %s-%s\n' "${START_SEED}" "${END_SEED}"
 printf 'Protocol: four-convolution source CNN | input 256 | batch 20 | 35 epochs | SGD lr 0.005, momentum 0.9, decay 1e-8 | class weights 0:1, 1:3\n\n'
 
 for seed in $(seq "${START_SEED}" "${END_SEED}"); do

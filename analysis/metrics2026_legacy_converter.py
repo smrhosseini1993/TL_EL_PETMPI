@@ -219,7 +219,7 @@ def convert_metrics2026_to_legacy(source_workbook: Path, output_workbook: Path) 
 
 
 def read_and_validate_reference_cnn_metrics2026(source_workbook: Path) -> Tuple[pd.DataFrame, Dict[str, np.ndarray], pd.DataFrame]:
-    """Read the complete 100-seed reference-CNN master workbook without modifying it."""
+    """Read the complete seed-varied reference-CNN workbook without modifying it."""
     if not source_workbook.exists():
         raise FileNotFoundError("Reference-CNN source workbook does not exist: {0}".format(source_workbook))
     sheets = pd.read_excel(str(source_workbook), sheet_name=None, engine="openpyxl")
@@ -230,6 +230,16 @@ def read_and_validate_reference_cnn_metrics2026(source_workbook: Path) -> Tuple[
                 sorted(expected_sheets), sorted(sheets)
             )
         )
+    study_lock = sheets["Study_lock"].copy()
+    if not {"item", "value"}.issubset(study_lock.columns):
+        raise ValueError("Reference-CNN Study_lock must contain item and value columns")
+    lock_values = dict(zip(study_lock["item"].astype(str), study_lock["value"].astype(str)))
+    if lock_values.get("random_seed_policy") != "seed_varied_1_to_100":
+        raise ValueError(
+            "Reference-CNN workbook is not the required seed-varied 1-100 analysis. "
+            "Do not use fixed-seed audit repeats for stability or paper reporting."
+        )
+
     runs = sheets["Run_results"].copy()
     missing_columns = sorted(_required_run_columns() - set(runs.columns))
     if missing_columns:
@@ -264,7 +274,7 @@ def read_and_validate_reference_cnn_metrics2026(source_workbook: Path) -> Tuple[
         if (int((labels == 0).sum()), int((labels == 1).sum())) != (expected_zero, expected_one):
             raise ValueError("Reference-CNN Patient_manifest has invalid {0} class counts".format(split))
         labels_by_split[split] = labels
-    return runs.sort_values("seed").reset_index(drop=True), labels_by_split, sheets["Study_lock"].copy()
+    return runs.sort_values("seed").reset_index(drop=True), labels_by_split, study_lock
 
 
 def convert_reference_cnn_metrics2026_to_legacy(source_workbook: Path, output_workbook: Path) -> pd.DataFrame:
@@ -284,7 +294,7 @@ def convert_reference_cnn_metrics2026_to_legacy(source_workbook: Path, output_wo
         raise RuntimeError("Converted reference-CNN workbook lacks one unique legacy row per seed")
     conversion_lock = pd.DataFrame([
         ("source_workbook", str(source_workbook)),
-        ("source_design", "Retained four-convolution reference CNN: one architecture x 100 prespecified seeds"),
+        ("source_design", "Seed-varied retained four-convolution reference CNN: one architecture x 100 prespecified random seeds"),
         ("output_purpose", "Visualisation compatibility with legacy metrics.xlsx plotting cells"),
         ("source_modified", "false"),
         ("prediction_precision", "Legacy-compatible sheet1 prediction strings are rounded to four decimals; source CNN_metrics2026.xlsx retains audited full precision"),

@@ -37,13 +37,19 @@ def create_secure_root(root: Path) -> None:
 
 
 def test_model_and_metrics() -> None:
-    cnn.set_legacy_source_random_state()
+    cnn.set_run_random_state(1)
     observed = float(np.random.random())
     np.random.seed(1)
     assert observed == float(np.random.random())
-    model = cnn.make_model(cnn.INPUT_SIZE)
-    assert int(model.count_params()) == 124289
-    cnn.compile_model(model)
+    model_one = cnn.make_model(cnn.INPUT_SIZE)
+    weights_one = [weight.copy() for weight in model_one.get_weights()]
+    assert int(model_one.count_params()) == 124289
+    cnn.tf.keras.backend.clear_session()
+    cnn.set_run_random_state(2)
+    model_two = cnn.make_model(cnn.INPUT_SIZE)
+    weights_two = model_two.get_weights()
+    assert any(not np.array_equal(left, right) for left, right in zip(weights_one, weights_two))
+    cnn.compile_model(model_two)
     values = cnn.calculate_metrics([0, 0, 1, 1], [0.1, 0.4, 0.6, 0.9])
     assert values["accuracy"] == 1.0
     assert values["auc"] == 1.0
@@ -85,6 +91,16 @@ def test_dry_run_and_workbook_integrity() -> None:
             raise AssertionError("Duplicate seed did not raise an error")
         except ValueError as error:
             assert "Duplicate completed reference-CNN seed" in str(error)
+
+        fixed_seed_lock = lock.copy()
+        fixed_seed_lock.loc[fixed_seed_lock["item"] == "random_seed_policy", "value"] = "fixed_source_constants"
+        fixed_seed_output = root / "fixed_seed_audit.xlsx"
+        cnn.append_run_to_workbook(fixed_seed_output, row, manifest, fixed_seed_lock)
+        try:
+            cnn.validate_existing_workbook(fixed_seed_output, manifest, lock)
+            raise AssertionError("Fixed-seed audit workbook did not raise an error")
+        except ValueError as error:
+            assert "fixed-seed" in str(error)
 
 
 def main() -> None:

@@ -143,11 +143,13 @@ For the historic-split final ensemble result, open `notebooks/R1_final_ensemble_
 
 `notebooks/convert_metrics2026_to_legacy.ipynb` can create a separate `metrics_legacy_compatible.xlsx` workbook from the final `metrics2026.xlsx`. Its `sheet1` has the legacy metrics column names and four-decimal prediction text so old plotting cells can be adapted quickly. The source workbook is read-only and remains the auditable master dataset. Do not use the compatibility output to revive any legacy best-run, test-set-selection, Borda-count, or run-level inferential workflow.
 
-The same notebook accepts `SOURCE_TYPE = 'reference_cnn'` to create a separate `CNN_metrics2026_legacy_compatible.xlsx` from the 100-seed reference-CNN master workbook. The source CNN workbook remains read-only; use the master workbook for patient-level reporting.
+The same notebook accepts `SOURCE_TYPE = 'reference_cnn'` to create a separate `CNN_metrics2026_legacy_compatible.xlsx` from the complete **seed-varied** 100-run reference-CNN master workbook. The source CNN workbook remains read-only; use the master workbook for patient-level reporting.
 
 ### Retained reference-CNN rerun
 
-The original supplied AUC and ACC scripts have the same four-convolution architecture and identical training protocol. They differ only in the Keras metric displayed while fitting; neither metric controls early stopping or selection. `Experiment2026/reference_cnn2026.py` preserves the common source protocol, including its effective NumPy=1 and TensorFlow=2 random-state calls for every repeat, while recording both post-fit AUC and accuracy in `CNN_metrics2026.xlsx`. The workbook's `seed` field is therefore a repeat identifier (1–100), not a replacement model-initialisation seed.
+The original supplied AUC and ACC scripts have the same four-convolution architecture and identical training protocol. They differ only in the Keras metric displayed while fitting; neither metric controls early stopping or selection. For the current stability reanalysis, `Experiment2026/reference_cnn2026.py` retains the architecture, image processing, split, optimizer, class weights, batch size, and epochs, while applying prespecified seeds 1–100 to Python, NumPy, TensorFlow, and Keras before model construction and fitting. This is the only intentional departure from the original fixed NumPy=1/TensorFlow=2 random-state policy, and it is necessary for valid repeated-run stability analysis.
+
+The earlier `CNN_metrics2026.xlsx` generated under the fixed-source random-state policy is an **audit-only artifact**. It must be archived outside the active output path and must not be used for paper reporting. Current conversion and final-reporting code reject fixed-seed audit workbooks by their `Study_lock` provenance.
 
 Run the structural preflight first:
 

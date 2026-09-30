@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reproducible 100-seed runner for the historic four-convolution reference CNN.
+"""Seed-varied 100-run reanalysis of the historic four-convolution reference CNN.
 
 This runner retains the architecture and fixed training settings in the supplied
 ``polar_map_classifier_v2_55_AUC.py`` and ``polar_map_classifier_v2_55_ACC.py``
@@ -7,8 +7,8 @@ reference implementations.  Those source files differ only in the metric display
 while fitting; neither uses that metric for early stopping or model selection.
 
 Intentional 2026 output changes:
-* one indexed repeat per run (1--100), while retaining Jarmo's fixed NumPy/TensorFlow
-  source random states for every repeat;
+* one prespecified random seed per run (1--100), applied before model construction
+  and fitting to support a valid repeated-run stability analysis;
 * full-precision ordered train/validation/test probabilities in one audited workbook;
 * separate 61-patient train and 31-patient validation metrics, while retaining the
   source code's ``validation_split=1/3`` fit behaviour; and
@@ -20,6 +20,8 @@ from __future__ import print_function
 
 import argparse
 import gc
+import os
+import random
 import time
 from copy import copy
 from pathlib import Path
@@ -45,6 +47,7 @@ LEARNING_RATE = 0.005
 LEARNING_RATE_DECAY = 1e-8
 MOMENTUM = 0.9
 CLASS_WEIGHTS = {0: 1.0, 1: 3.0}
+RANDOM_SEED_POLICY = "seed_varied_1_to_100"
 
 
 def parse_args() -> argparse.Namespace:
@@ -59,7 +62,7 @@ def parse_args() -> argparse.Namespace:
         "--output-file", type=Path, default=DEFAULT_OUTPUT_FILE,
         help="Secure local workbook written by this runner (default: CNN_metrics2026.xlsx)."
     )
-    parser.add_argument("--seed", type=int, required=True, help="Indexed repeat identifier (1-100) for one reference-CNN run.")
+    parser.add_argument("--seed", type=int, required=True, help="Prespecified random seed (1-100) for one reference-CNN run.")
     parser.add_argument("--input-size", type=int, default=INPUT_SIZE, help="Locked source-code resize dimension (256).")
     parser.add_argument("--batch-size", type=int, default=BATCH_SIZE, help="Locked source-code mini-batch size (20).")
     parser.add_argument("--epochs", type=int, default=EPOCHS, help="Locked source-code epoch limit (35).")
@@ -68,16 +71,22 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def set_legacy_source_random_state() -> None:
-    """Retain the literal effective random-state calls in Jarmo's source code.
+def set_run_random_state(seed: int) -> None:
+    """Apply one prespecified seed before constructing and fitting the CNN.
 
-    The original calls ``np.random.seed()`` and then immediately ``seed(1)``,
-    so the first call has no effect on the final NumPy state. It then calls
-    ``tf.set_random_seed(2)``. The indexed output ``seed`` is a run identifier,
-    not a replacement model-initialisation seed.
+    The architecture, data split, preprocessing, optimizer, class weights, batch
+    size, and epoch count remain literal to Jarmo's source. Only the random-state
+    policy changes from its fixed constants (NumPy=1, TensorFlow=2) so 100 runs
+    represent distinct stochastic training realizations rather than GPU noise.
     """
-    np.random.seed(1)
-    tf.random.set_seed(2)
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+    tf.random.set_seed(seed)
+    try:
+        tf.keras.utils.set_random_seed(seed)
+    except AttributeError:
+        pass
 
 
 def load_binary_labels(path: Path) -> np.ndarray:
@@ -234,9 +243,11 @@ def patient_manifest(root: Path, split_data: Mapping[str, Mapping[str, Any]]) ->
 
 def study_lock_rows() -> pd.DataFrame:
     rows = [
-        ("study", "EJPH-D-26-00179 reference CNN 100-seed rerun"),
+        ("study", "EJPH-D-26-00179 seed-varied reference CNN 100-run reanalysis"),
         ("code_file", "reference_cnn2026.py"),
         ("source_implementations", "polar_map_classifier_v2_55_AUC.py and polar_map_classifier_v2_55_ACC.py; source difference was display metric only, not architecture or training"),
+        ("random_seed_policy", RANDOM_SEED_POLICY),
+        ("random_seed_scope", "Per-run seed 1-100 is applied to Python, NumPy, TensorFlow, and Keras before model construction and fitting. This intentionally replaces the source's fixed NumPy=1 and TensorFlow=2 random-state calls for repeated-run stability analysis only."),
         ("model_name", MODEL_NAME),
         ("split", "Historic alphabetical fixed split: first 61 development patients=train; next 31=validation; separate 46=test"),
         ("split_class_counts", "train: 36 label-0 / 25 label-1; validation: 20 / 11; test: 26 / 20"),
@@ -251,9 +262,9 @@ def study_lock_rows() -> pd.DataFrame:
         ("class_weights", "Literal source weights: label-0=1, label-1=3"),
         ("fit_validation", "Literal source behavior: model.fit on 92 development images with validation_split=1/3; first 61 rows fit, final 31 rows validate; training rows shuffled by Keras each epoch"),
         ("threshold", "Literal source-era Keras predict_classes threshold: probability >0.50"),
-        ("run_identifier", "Run_results seed values 1-100 identify repeat executions only; literal source random states NumPy=1 and TensorFlow=2 are reset for every run"),
+        ("run_identifier", "Run_results seed values 1-100 are the prespecified random seeds applied before model construction and fitting"),
         ("probability_storage", "Full-precision comma-separated train/validation/test probabilities stored once per run; Patient_manifest fixes within-split order"),
-        ("analysis_scope", "100 indexed repeat rows describe run-to-run behavior only. Patient-level analysis must aggregate probabilities by patient across repeat rows; no best-run selection or run-level inference is permitted."),
+        ("analysis_scope", "100 seed rows describe stochastic-training stability only. Patient-level analysis must aggregate probabilities by patient across seeds; no best-run selection or run-level inference is permitted."),
     ]
     return pd.DataFrame(rows, columns=["item", "value"])
 
@@ -279,13 +290,26 @@ def existing_run(output_file: Path, seed: int) -> bool:
     return not runs.empty and bool((pd.to_numeric(runs["seed"], errors="raise").astype(int) == int(seed)).any())
 
 
-def append_run_to_workbook(output_file: Path, run_row: Mapping[str, Any], manifest: pd.DataFrame, lock: pd.DataFrame) -> None:
-    output_file.parent.mkdir(parents=True, exist_ok=True)
+def validate_existing_workbook(output_file: Path, manifest: pd.DataFrame, lock: pd.DataFrame) -> pd.DataFrame:
+    """Reject any existing workbook that cannot belong to this locked analysis."""
     runs, existing_manifest, existing_lock = _read_existing_workbook(output_file)
     if not existing_manifest.empty and not _same_frame(existing_manifest, manifest):
         raise ValueError("Existing Patient_manifest differs from this locked secure split. Refusing to mix outputs.")
     if not existing_lock.empty and not _same_frame(existing_lock, lock):
+        if {"item", "value"}.issubset(existing_lock.columns):
+            existing_values = dict(zip(existing_lock["item"].astype(str), existing_lock["value"].astype(str)))
+            if existing_values.get("random_seed_policy") != RANDOM_SEED_POLICY:
+                raise ValueError(
+                    "Existing CNN_metrics2026.xlsx is a fixed-seed audit or uses an unknown seed policy. "
+                    "Archive it outside the active output path before starting the seed-varied 1-100 analysis."
+                )
         raise ValueError("Existing Study_lock differs from this reference-CNN protocol. Refusing to mix outputs.")
+    return runs
+
+
+def append_run_to_workbook(output_file: Path, run_row: Mapping[str, Any], manifest: pd.DataFrame, lock: pd.DataFrame) -> None:
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    runs = validate_existing_workbook(output_file, manifest, lock)
 
     new_row = pd.DataFrame([dict(run_row)])
     if runs.empty:
@@ -331,6 +355,8 @@ def main() -> None:
     print("Locked source-CNN split verified: train=61 (0=36, 1=25); validation=31 (0=20, 1=11); test=46 (0=26, 1=20)")
     print("Model={0}; seed={1}; output={2}".format(MODEL_NAME, args.seed, args.output_file))
     print("Protocol: input=256; batch=20; epochs=35; SGD lr=0.005, momentum=0.9, decay=1e-8; class weights={0:1, 1:3}")
+    if args.output_file.exists():
+        validate_existing_workbook(args.output_file, manifest, lock)
     if args.dry_run:
         print("Dry run complete: secure split and locked arguments were validated; no images were loaded, model built, or workbook written.")
         return
@@ -339,7 +365,7 @@ def main() -> None:
         return
 
     tf.keras.backend.clear_session()
-    set_legacy_source_random_state()
+    set_run_random_state(args.seed)
     development_images = load_images(split_data["development"]["paths"], args.input_size)
     test_images = load_images(split_data["test"]["paths"], args.input_size)
     development_labels = np.asarray(split_data["development"]["labels"], dtype=np.int64)
