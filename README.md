@@ -105,6 +105,31 @@ hard calls, metric rows, and confusion counts between the direct old row-positio
 calculation and the current shared-rule code. It does not claim to reconstruct
 unavailable full-precision old predictions.
 
+### Internal 2025-versus-2026 comparison normalization
+
+For an internal like-for-like comparison only, create a separate derivative of the
+full-precision final `metrics2026.xlsx`. The source is never replaced. The resulting
+workbook places the same 72 `Run_results` core columns as `metrics2025.xlsx` first
+and uses the same ordered 46-patient comparison manifest. By default it preserves
+the actual full-precision 2026 test probabilities and source test metrics, so no
+continuous-score information is lost in a meaningful old-versus-new comparison. The
+original full patient manifest and study lock are retained as separate source sheets.
+
+```bash
+python scripts/normalize_metrics2026_for_2025_comparison.py \
+  --source-workbook /secure/path/metrics2026.xlsx \
+  --output-workbook /secure/path/metrics2026_comparable_to_metrics2025.xlsx
+```
+
+If checking the sensitivity of the old four-decimal representation specifically, add
+`--probability-representation four_decimal`. That creates a separate legacy-style
+copy and must not replace the full-precision comparison workbook, because it can
+change AUC through probability ties.
+
+Use this derivative only when comparing the old and new analyses through the same
+legacy-style processing code. Use the original full-precision `metrics2026.xlsx` for
+the final revised manuscript analyses.
+
 ## License
 
 MIT License — see [LICENSE](LICENSE).
