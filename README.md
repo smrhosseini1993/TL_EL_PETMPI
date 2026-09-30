@@ -16,6 +16,10 @@ This branch contains **only the active code used for the EJPH-D-26-00179 major r
 | 6 | `Experiment2026/reference_cnn2026.py` + `run_reference_cnn2026.sh` | Seed-varied 100-run rerun of the retained four-convolution reference CNN. | Secure `data/training` and `data/test` | `CNN_metrics2026.xlsx` |
 | 7 | `notebooks/results_publish.ipynb` | Final paper-order tables, figures, patient-level bootstrap CIs, paired DeLong tests, and McNemar tests. | Raw workbooks from steps 1, 4–6 | Separate Results/Supplementary package |
 
+## Internal preprocessing-only attribution diagnostic
+
+`Experiment2026/preprocessing_only_ablation.py` is a **separate internal diagnostic**, not an active manuscript-analysis workflow. It retains the archived legacy learning conditions—128×128 input, batch size 5, training-only red/green channel multiplication by 1.1, the frozen-backbone behavior, and no explicit random seed—while replacing only the universal legacy `/255` image scaling with the correct architecture-specific Keras `preprocess_input` function. Its output must be named `metrics_preprocessing_only.xlsx`, remain outside Git, and must never be used for manuscript results, EL selection, clinical comparison, or inferential statistics. `run_preprocessing_only_ablation.sh` defaults to five repeats per architecture as a preflight and can resume to 100 repeats using its `START_REPEAT` and `END_REPEAT` environment variables.
+
 ## Core analysis rules
 
 - The historic fixed split is **61 training / 31 validation / 46 test patients**.

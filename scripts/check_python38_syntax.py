@@ -8,6 +8,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 FILES = [
     REPO_ROOT / "Experiment2026" / "experiments2026.py",
+    REPO_ROOT / "Experiment2026" / "preprocessing_only_ablation.py",
     REPO_ROOT / "Experiment2026" / "ensemble_selection_cv_2026.py",
     REPO_ROOT / "Experiment2026" / "baselines2026.py",
     REPO_ROOT / "Experiment2026" / "reference_cnn2026.py",
@@ -24,6 +25,7 @@ FILES = [
     REPO_ROOT / "scripts" / "test_legacy_metrics2025_adapter.py",
     REPO_ROOT / "scripts" / "normalize_metrics2026_for_2025_comparison.py",
     REPO_ROOT / "scripts" / "test_crossyear_metrics_normalizer.py",
+    REPO_ROOT / "scripts" / "test_preprocessing_only_ablation.py",
     REPO_ROOT / "scripts" / "test_reference_cnn2026.py",
     REPO_ROOT / "scripts" / "test_results_publish.py",
 ]
