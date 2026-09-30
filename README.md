@@ -74,6 +74,37 @@ python scripts/test_reference_cnn2026.py
 python scripts/test_results_publish.py
 ```
 
+### Legacy Top-5 Max Rule parity check
+
+`analysis/legacy_metrics2025_adapter.py` and the two command-line scripts below
+exist **only** to verify that the revised shared ensemble implementation preserves
+the historical Top-5 Max Rule applied to the submitted legacy `metrics.xlsx`.
+They are not part of the final revision analysis or manuscript reporting workflow.
+
+The source file has one sheet with 12 architectures × 100 rows. `EfficientNetB0`
+is excluded because it was not part of the submitted manuscript's 11-architecture
+comparison. Several old `tag` values are duplicated; the old notebook matched runs
+by their row position within each architecture. The converter deliberately maps that
+position to seeds 1–100 and retains the old `tag` only as provenance.
+
+```bash
+python scripts/convert_legacy_metrics2025.py \
+  --legacy-workbook /secure/path/metrics.xlsx \
+  --test-labels /secure/path/ica_lables.txt \
+  --output-workbook /secure/path/metrics2025.xlsx
+
+python scripts/verify_legacy_top5_max_rule.py \
+  --legacy-workbook /secure/path/metrics.xlsx \
+  --test-labels /secure/path/ica_lables.txt \
+  --metrics2025 /secure/path/metrics2025.xlsx \
+  --output-workbook /secure/path/legacy_top5_max_rule_reproduction.xlsx
+```
+
+The latter command requires exact equality for all 100 saved-probability vectors,
+hard calls, metric rows, and confusion counts between the direct old row-position
+calculation and the current shared-rule code. It does not claim to reconstruct
+unavailable full-precision old predictions.
+
 ## License
 
 MIT License — see [LICENSE](LICENSE).
