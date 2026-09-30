@@ -223,6 +223,9 @@ def test_notebook_content() -> None:
     assert "TOP5_MODELS" in final_content
     assert "SELECTED_RULE" in final_content
     assert "RUN_ANALYSIS = False" in final_content
+    assert "INPUT_DIR = PROJECT_ROOT / 'secure_inputs'" in final_content
+    assert "TL_WORKBOOK = INPUT_DIR / 'metrics2026.xlsx'" in final_content
+    assert "OUTPUT_WORKBOOK = INPUT_DIR / 'R1_final_ensemble_raw_runs.xlsx'" in final_content
     assert "R1_final_ensemble_raw_runs.xlsx" in final_content
 
 

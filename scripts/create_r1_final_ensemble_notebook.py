@@ -54,10 +54,12 @@ from analysis.r1_ensemble_core import (
     validate_manual_configuration,
 )
 
-# Secure local paths. These files must never be committed to Git.
-TL_WORKBOOK = REPO_ROOT / 'Experiment2026' / 'metrics2026.xlsx'
-ANALYSIS_OUTPUT_DIR = REPO_ROOT.parent / 'secure_analysis' / 'R1_final_ensemble_2026'
-OUTPUT_WORKBOOK = ANALYSIS_OUTPUT_DIR / 'R1_final_ensemble_raw_runs.xlsx'
+# Secure local Mac inputs/outputs. These files must never be committed to Git.
+# With the recommended layout, PROJECT_ROOT is PETMPI_R1_final_analysis/.
+PROJECT_ROOT = REPO_ROOT.parent
+INPUT_DIR = PROJECT_ROOT / 'secure_inputs'
+TL_WORKBOOK = INPUT_DIR / 'metrics2026.xlsx'
+OUTPUT_WORKBOOK = INPUT_DIR / 'R1_final_ensemble_raw_runs.xlsx'
 
 # Enter these names manually after reviewing the middle development-only notebook.
 TOP3_MODELS = [
@@ -133,7 +135,7 @@ Each ensemble seed uses only same-seed constituent predictions. This cell create
 The workbook is intentionally simple. It contains only the raw ensemble runs, their ordered 46-patient probabilities, the test manifest, and a short provenance sheet. A later combined-analysis notebook will merge this with TL, CNN, and clinical-reader inputs for medians, patient-level 95% CIs, tables, and figures.
 """),
     code("""if RUN_ANALYSIS:
-    ANALYSIS_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    OUTPUT_WORKBOOK.parent.mkdir(parents=True, exist_ok=True)
     raw_run_results = raw_ensemble_run_results(
         ensemble_predictions=ensemble_predictions,
         ensemble_run_metrics=ensemble_run_metrics,
@@ -150,7 +152,7 @@ The workbook is intentionally simple. It contains only the raw ensemble runs, th
     markdown("""## Raw output
 
 ```text
-secure_analysis/R1_final_ensemble_2026/
+secure_inputs/
 └── R1_final_ensemble_raw_runs.xlsx
     ├── Run_results       # 100 raw ensemble runs with metrics and 46 ordered probabilities
     ├── Patient_manifest  # test-patient order and labels
