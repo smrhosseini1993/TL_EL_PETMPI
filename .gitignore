@@ -18,10 +18,6 @@ log/
 *.keras
 *.h5
 
-# Only the non-sensitive manifest template belongs in Git.
-configs/fixed_split_manifest.csv
-configs/selected_protocol.json
-
 # Secure final and diagnostic workbooks from the retained-legacy 2026 rerun.
 Experiment2026/metrics2026*.xlsx
 Experiment2026/CNN_metrics2026*.xlsx

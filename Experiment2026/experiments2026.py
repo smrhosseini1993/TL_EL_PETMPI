@@ -109,12 +109,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model-name", choices=SUPPORTED_MODELS, required=True, help="One ImageNet architecture.")
     parser.add_argument("--seed", type=int, required=True, help="Prespecified integer seed for this run.")
     parser.add_argument("--input-size", type=int, default=128, help="Fixed retained benchmark input size (default: 128).")
-    parser.add_argument("--batch-size", type=int, default=10, choices=(5, 10), help="Batch size; 10 is the retained final protocol and 5 is allowed only for a labelled diagnostic run (default: 10).")
+    parser.add_argument("--batch-size", type=int, default=10, choices=(10,), help="Locked mini-batch size (10).")
     parser.add_argument("--phase1-epochs", type=int, default=100, help="Maximum head-training epochs (default: 100).")
     parser.add_argument("--phase2-epochs", type=int, default=100, help="Maximum legacy layer -2 fine-tuning epochs (default: 100).")
     parser.add_argument("--phase3-epochs", type=int, default=100, help="Maximum legacy layer -2/-3 fine-tuning epochs (default: 100).")
-    parser.add_argument("--red-green-shift", action="store_true", help="Diagnostic only: apply the legacy 1.10 red/green training-image channel scaling. Never use for the final reviewer-corrected run.")
-    parser.add_argument("--diagnostic-label", type=str, default="final_no_shift", help="Immutable protocol label written to the output workbook.")
     parser.add_argument("--resume", action="store_true", help="Skip this model/seed if it is already present in the one workbook.")
     parser.add_argument("--dry-run", action="store_true", help="Validate input data and locked split without constructing a model or writing an output file.")
     return parser.parse_args()
@@ -184,7 +182,7 @@ def patient_manifest(root: Path, split_data: Mapping[str, Mapping[str, Any]]) ->
     return pd.DataFrame(rows)
 
 
-def make_dataset(paths: Sequence[Path], labels: Sequence[int], model_name: str, input_size: int, batch_size: int, seed: int, training: bool, red_green_shift: bool = False) -> tf.data.Dataset:
+def make_dataset(paths: Sequence[Path], labels: Sequence[int], model_name: str, input_size: int, batch_size: int, seed: int, training: bool) -> tf.data.Dataset:
     preprocess_input = MODEL_PREPROCESSORS[model_name]
     path_text = [str(path) for path in paths]
     label_values = np.asarray(labels, dtype=np.float32)
@@ -197,14 +195,6 @@ def make_dataset(paths: Sequence[Path], labels: Sequence[int], model_name: str, 
         # is the only intentional input-pipeline correction.
         image = tf.image.resize(image, (input_size, input_size))
         image = tf.cast(image, tf.float32)
-        if training and red_green_shift:
-            # Apply the legacy colour change in raw RGB pixel space before the
-            # architecture-specific preprocessing function. This preserves the intended
-            # 10% red/green brightness change despite architecture-specific input ranges.
-            red, green, blue = tf.unstack(image, axis=-1)
-            red = tf.clip_by_value(red * 1.10, 0.0, 255.0)
-            green = tf.clip_by_value(green * 1.10, 0.0, 255.0)
-            image = tf.stack([red, green, blue], axis=-1)
         # Deliberately no /255, MixUp, or geometric/color augmentation.
         image = preprocess_input(image)
         return image, label
@@ -340,7 +330,7 @@ def prefixed_metrics(prefix: str, metrics: Mapping[str, Any]) -> Dict[str, Any]:
     return result
 
 
-def study_lock_rows(batch_size: int = 10, red_green_shift: bool = False, diagnostic_label: str = "final_no_shift") -> pd.DataFrame:
+def study_lock_rows() -> pd.DataFrame:
     rows = [
         ("study", "EJPH-D-26-00179 2026 fixed-split TL rerun"),
         ("code_file", "experiments2026.py"),
@@ -350,6 +340,7 @@ def study_lock_rows(batch_size: int = 10, red_green_shift: bool = False, diagnos
         ("input", "128 x 128 x 3 RGB JPEG"),
         ("input_resolution_rationale", "Historical common input representation. The manuscript rationale must cite Jarmo's separate development-only 128-versus-256 resolution analysis; its exact methods and results are not encoded in this run workbook."),
         ("preprocessing", "Architecture-specific official Keras preprocess_input; raw decoded/resized pixels remain 0-255 before that function"),
+        ("augmentation", "None: no red/green channel shift, no MixUp, no geometric or colour augmentation"),
         ("classifier_head", "Flatten -> Dense(1024, ReLU) -> Dropout(0.50) -> Dense(512, ReLU) -> Dropout(0.50) -> Dense(256, ReLU) -> Dropout(0.50) -> sigmoid"),
         ("optimizer", "Adam with learning_rate=0.0003"),
         ("batch_size", "10 images per mini-batch, retained from the fixed-validation benchmark launcher."),
@@ -362,15 +353,6 @@ def study_lock_rows(batch_size: int = 10, red_green_shift: bool = False, diagnos
         ("probability_storage", "Full precision comma-separated train/validation/test probabilities stored once per run; Patient_manifest fixes their within-split order."),
         ("analysis_scope", "Run-level distributions are descriptive stability only. Patient-level analysis must aggregate predictions by patient across seeds using Patient_manifest."),
     ]
-    # Keep the original final-protocol Study_lock schema so the completed clean
-    # 55-run workbook can safely receive seeds 6-100. Diagnostics always use a
-    # separate workbook and carry their extra protocol identifiers.
-    if diagnostic_label == "final_no_shift" and batch_size == 10 and not red_green_shift:
-        rows.insert(8, ("augmentation", "None: no red/green channel shift, no MixUp, no geometric or colour augmentation"))
-    else:
-        rows.insert(8, ("batch_size", str(batch_size)))
-        rows.insert(9, ("diagnostic_label", diagnostic_label))
-        rows.insert(10, ("red_green_shift", "Enabled only for a separately labelled diagnostic workbook; not permitted in the final reviewer-corrected protocol." if red_green_shift else "None"))
     return pd.DataFrame(rows, columns=["item", "value"])
 
 
@@ -430,10 +412,6 @@ def main() -> None:
     args = parse_args()
     if args.input_size != 128:
         raise ValueError("This retained benchmark rerun is locked to --input-size 128.")
-    if args.batch_size == 5 and not args.red_green_shift:
-        raise ValueError("Batch size 5 is reserved for the separately labelled red-green diagnostic comparison; the final protocol uses batch size 10.")
-    if args.red_green_shift and not args.diagnostic_label.startswith("diagnostic_"):
-        raise ValueError("A red-green diagnostic run requires a diagnostic_label beginning with 'diagnostic_'.")
     if min(args.phase1_epochs, args.phase2_epochs, args.phase3_epochs) <= 0:
         raise ValueError("All three phase epoch limits must be positive.")
 
@@ -441,12 +419,12 @@ def main() -> None:
     args.output_file = args.output_file.resolve()
     split_data = read_split_data(args.root)
     manifest = patient_manifest(args.root, split_data)
-    study_lock = study_lock_rows(args.batch_size, args.red_green_shift, args.diagnostic_label)
+    study_lock = study_lock_rows()
 
     print("Locked fixed split verified: train=61 (0=36, 1=25); validation=31 (0=20, 1=11); test=46 (0=26, 1=20)")
     print("Model={0}; seed={1}; output={2}".format(args.model_name, args.seed, args.output_file))
     print("Preprocessing={0}".format(PREPROCESSING_LABELS[args.model_name]))
-    print("Red/green shift={0}; class weights=enabled; Adam LR=0.0003; dropout=0.50; input=128; batch={1}".format(args.red_green_shift, args.batch_size))
+    print("Augmentation=None; class weights=enabled; Adam LR=0.0003; dropout=0.50; input=128; batch={0}".format(args.batch_size))
 
     if args.dry_run:
         print("Dry run complete: secure split, manifest order and locked arguments were validated; no model and no workbook were created.")
@@ -457,7 +435,7 @@ def main() -> None:
 
     set_seed(args.seed)
     tf.keras.backend.clear_session()
-    train_dataset = make_dataset(split_data["train"]["paths"], split_data["train"]["labels"], args.model_name, args.input_size, args.batch_size, args.seed, training=True, red_green_shift=args.red_green_shift)
+    train_dataset = make_dataset(split_data["train"]["paths"], split_data["train"]["labels"], args.model_name, args.input_size, args.batch_size, args.seed, training=True)
     train_evaluation_dataset = make_dataset(split_data["train"]["paths"], split_data["train"]["labels"], args.model_name, args.input_size, args.batch_size, args.seed, training=False)
     validation_dataset = make_dataset(split_data["validation"]["paths"], split_data["validation"]["labels"], args.model_name, args.input_size, args.batch_size, args.seed, training=False)
     test_dataset = make_dataset(split_data["test"]["paths"], split_data["test"]["labels"], args.model_name, args.input_size, args.batch_size, args.seed, training=False)
@@ -488,7 +466,7 @@ def main() -> None:
         "class_weights_enabled": True,
         "class_weight_0": float(class_weights[0]),
         "class_weight_1": float(class_weights[1]),
-        "augmentation": "diagnostic_legacy_red_green_scale_1.10_training_only" if args.red_green_shift else "none",
+        "augmentation": "none",
         "preprocessing": PREPROCESSING_LABELS[args.model_name],
         "phase1_requested_epochs": phase_1["requested_epochs"],
         "phase1_actual_epochs": phase_1["actual_epochs"],
@@ -509,11 +487,6 @@ def main() -> None:
         "phase3_non_trainable_params": phase_3["non_trainable_params"],
         "phase3_selected_layers": phase_3["selected_layers"],
     }
-    # Preserve the Run_results column schema of the already completed clean
-    # 55-run workbook. Diagnostic provenance is carried in a separate workbook
-    # and its Study_lock; only diagnostic rows require this extra field.
-    if args.red_green_shift:
-        run_row["diagnostic_label"] = args.diagnostic_label
     run_row.update(prefixed_metrics("train", calculate_metrics(split_data["train"]["labels"], train_probabilities)))
     run_row.update(prefixed_metrics("validation", calculate_metrics(split_data["validation"]["labels"], validation_probabilities)))
     run_row.update(prefixed_metrics("test", calculate_metrics(split_data["test"]["labels"], test_probabilities)))

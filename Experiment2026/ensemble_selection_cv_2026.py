@@ -84,7 +84,6 @@ def final_protocol_description() -> Dict[str, Any]:
         "dropout_rate": 0.50,
         "class_weights": True,
         "augmentation": "none",
-        "red_green_shift": False,
         "phase1_epochs": 100,
         "phase2_epochs": 100,
         "phase3_epochs": 100,
@@ -209,10 +208,10 @@ def train_one_fold(
     final_protocol.set_seed(seed)
     tf.keras.backend.clear_session()
     train_dataset = final_protocol.make_dataset(
-        train_paths, train_labels, model_name, 128, 10, seed, training=True, red_green_shift=False
+        train_paths, train_labels, model_name, 128, 10, seed, training=True
     )
     validation_dataset = final_protocol.make_dataset(
-        validation_paths, validation_labels, model_name, 128, 10, seed, training=False, red_green_shift=False
+        validation_paths, validation_labels, model_name, 128, 10, seed, training=False
     )
     class_weights = final_protocol.make_class_weights(train_labels)
     model, base_model = final_protocol.make_model(model_name, 128)
