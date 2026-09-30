@@ -227,6 +227,10 @@ def test_notebook_content() -> None:
     assert "TL_WORKBOOK = INPUT_DIR / 'metrics2026.xlsx'" in final_content
     assert "OUTPUT_WORKBOOK = INPUT_DIR / 'R1_final_ensemble_raw_runs.xlsx'" in final_content
     assert "R1_final_ensemble_raw_runs.xlsx" in final_content
+    assert "Descriptive stability across the 100 ensemble runs" in final_content
+    assert "run_stability_summary" in final_content
+    assert "confusion_stability_table" in final_content
+    assert "True positives (TP)" in final_content
 
 
 def main() -> None:

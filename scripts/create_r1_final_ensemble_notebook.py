@@ -22,7 +22,7 @@ cells = [
 
 **Purpose:** This notebook applies **one manually entered, development-selected ensemble configuration** to the completed `metrics2026.xlsx` workbook. It creates 100 run-matched ensemble runs and writes one simple raw Excel workbook.
 
-> **Boundary:** This notebook does not rank architectures, rank ensemble configurations, calculate median summaries, calculate confidence intervals, or choose a test-set winner. Later paper reporting will combine this raw 100-run EL workbook with the 1,100 TL runs, 100 CNN runs, and the clinical-reader output.
+> **Boundary:** This notebook does not rank architectures, rank ensemble configurations, calculate confidence intervals, or choose a test-set winner. Its final two cells display descriptive median (IQR) seed-stability summaries only. Later paper reporting will combine this raw 100-run EL workbook with the 1,100 TL runs, 100 CNN runs, and the clinical-reader output.
 
 For seed 1, it takes seed-1 predictions from every selected constituent model and applies the selected rule. It repeats this for seeds 2–100. No model is retrained and no additional patients are used.
 """),
@@ -51,6 +51,7 @@ from analysis.r1_ensemble_core import (
     load_historic_tl_workbook,
     raw_ensemble_run_results,
     raw_ensemble_study_lock,
+    run_stability_summary,
     validate_manual_configuration,
 )
 
@@ -148,6 +149,42 @@ The workbook is intentionally simple. It contains only the raw ensemble runs, th
         raw_lock.to_excel(writer, sheet_name='Study_lock', index=False)
     print('Wrote raw 100-run ensemble workbook:', OUTPUT_WORKBOOK)
     print('Sheets: Run_results | Patient_manifest | Study_lock')
+"""),
+    markdown("""## 5. Descriptive stability across the 100 ensemble runs
+
+This table is the familiar median (IQR) summary across the 100 run-matched ensemble realizations. It is **descriptive training-stability information only**. It is not a patient-level confidence interval and it is not used for any hypothesis test.
+"""),
+    code("""if RUN_ANALYSIS:
+    stability_summary = run_stability_summary(ensemble_run_metrics).iloc[0]
+    stability_table = pd.DataFrame([
+        {
+            'Metric': metric,
+            'Median': float(stability_summary['{0}_median'.format(metric)]),
+            'IQR': float(stability_summary['{0}_iqr'.format(metric)]),
+        }
+        for metric in ('ACC', 'PRE', 'SEN', 'SPE', 'F1S', 'AUC')
+    ])
+    display(stability_table.style.format({'Median': '{:.3f}', 'IQR': '{:.3f}'}))
+    print('Descriptive summary across {0} run-matched ensemble seeds.'.format(int(stability_summary['n_runs'])))
+"""),
+    markdown("""## 6. Descriptive confusion-matrix stability across the 100 ensemble runs
+
+Each seed produces one confusion matrix for the same 46 test patients. This table summarizes the run-level TP, TN, FP, and FN counts using the median, first quartile (Q1), third quartile (Q3), IQR, minimum, and maximum. It is descriptive only; the final patient-level confusion matrix is produced later by `results_publish.ipynb` from seed-mean probabilities.
+"""),
+    code("""if RUN_ANALYSIS:
+    confusion_stability_table = pd.DataFrame([
+        {
+            'Component': component,
+            'Median': float(ensemble_run_metrics[column].median()),
+            'Q1': float(ensemble_run_metrics[column].quantile(0.25)),
+            'Q3': float(ensemble_run_metrics[column].quantile(0.75)),
+            'IQR': float(ensemble_run_metrics[column].quantile(0.75) - ensemble_run_metrics[column].quantile(0.25)),
+            'Minimum': int(ensemble_run_metrics[column].min()),
+            'Maximum': int(ensemble_run_metrics[column].max()),
+        }
+        for component, column in (('True positives (TP)', 'tp'), ('True negatives (TN)', 'tn'), ('False positives (FP)', 'fp'), ('False negatives (FN)', 'fn'))
+    ])
+    display(confusion_stability_table.style.format({'Median': '{:.1f}', 'Q1': '{:.1f}', 'Q3': '{:.1f}', 'IQR': '{:.1f}'}))
 """),
     markdown("""## Raw output
 
