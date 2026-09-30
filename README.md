@@ -2,7 +2,7 @@
 
 This branch contains **only the active code used for the EJPH-D-26-00179 major revision**. Patient images, labels, clinical data, model weights, and analysis workbooks are intentionally excluded from Git and must remain on approved secure storage.
 
-> **Removed from this branch:** the legacy `EL_ensemble.ipynb`, the SQLite/256×256 transfer-learning workflow, old legacy-format conversion notebooks, and red/green diagnostic scripts. They must not be used for the revised manuscript. Git history preserves prior development records without leaving competing runnable workflows in the active codebase.
+> **Removed from this branch:** the legacy `EL_ensemble.ipynb`, the SQLite/256×256 transfer-learning workflow, old legacy-format conversion notebooks, and superseded red/green diagnostic scripts. They must not be used for the revised manuscript. The separately labelled preprocessing-only attribution diagnostic below is retained solely for the current internal audit.
 
 ## Active workflow
 
