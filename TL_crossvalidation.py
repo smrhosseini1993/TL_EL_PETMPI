@@ -96,23 +96,11 @@ parser.add_argument(
     action='store_true'
 )
 parser.add_argument(
-    '--augmented',
-    dest='augmented',
-    help='Use Augmented Dataset?',
-    action='store_true'
-)
-parser.add_argument(
     '--tag',
     dest='tag',
     help='custom tag',
     default="tag",
     type=str
-)
-parser.add_argument(
-    '--mixup',
-    dest='mixup',
-    help='Use Mixup Augmented Dataset?',
-    action='store_true'
 )
 parser.add_argument(
     '--det',
@@ -279,77 +267,15 @@ def normalize_model_name(name):
     return name
 
 
-def sample_beta_distribution(size, alpha):
-    gamma_left = tf.random.gamma(shape=[size], alpha=alpha)
-    gamma_right = tf.random.gamma(shape=[size], alpha=alpha)
-    beta = gamma_left / (gamma_left + gamma_right)
-    return beta
-
-
-def linear_combination(x1, x2, alpha):
-    # return tf.multiply(x1, alpha) + tf.multiply(x2, (1 - alpha))
-    return x1 * alpha + x2 * (1 - alpha)
-
-
-def get_preprocessor(image_size, train=False):
+def get_preprocessor(image_size):
     def preprocess_image(image_path, label):
         image = tf.io.read_file(image_path)
         image = tf.image.decode_jpeg(image, channels=3)
         image = tf.image.resize(image, [image_size, image_size])
         image = tf.cast(image, tf.float32) / 255.0
-
-        if train:
-            # Split the image into channels
-            red, green, blue = tf.unstack(image, axis=-1)
-
-            # Increase the green and red channels
-            green = tf.clip_by_value(green * 1.1, 0.0, 1.0)
-            red = tf.clip_by_value(red * 1.1, 0.0, 1.0)
-
-            # Recompose the image with the modified channels
-            image = tf.stack([red, green, blue], axis=-1)
-
-
-
         return image, label
 
     return preprocess_image
-
-
-def mix_up(ds_one, ds_two, alpha=0.2):
-    # Unpack two datasets
-    images_one, labels_one = ds_one
-    images_two, labels_two = ds_two
-    batch_size = tf.shape(images_one)[0]
-
-    # Sample lambda and reshape it to do the mixup
-    lamda = sample_beta_distribution(batch_size, alpha)
-    images_lamda = tf.reshape(lamda, (batch_size, 1, 1, 1))  # 3channel images
-    labels_lamda = tf.reshape(lamda, (batch_size, 1))
-
-    # Perform mixup on both images and labels by combining a pair of images/labels
-    # (one from each dataset) into one image/label
-    images = linear_combination(images_one, images_two, images_lamda)
-    labels = linear_combination(labels_one, labels_two, labels_lamda)
-
-    print(images.shape)
-    print(labels.shape)
-
-    return (images, labels)
-
-
-def mix_up2(ds_1, ds_2):
-    (image1, label1), (image2, label2) = ds_1, ds_2
-    # lamda = tfp.distributions.Beta(0.4, 0.4)
-    lamda = sample_beta_distribution(1, 0.4)
-
-    image = lamda * image1 + (1 - lamda) * image2
-    label = lamda * label1 + (1 - lamda) * label2
-
-    batch_size = tf.shape(image1)[0]
-    label = tf.reshape(label, (batch_size, 1))
-
-    return image, label
 
 
 if __name__ == '__main__':
@@ -375,9 +301,7 @@ if __name__ == '__main__':
     is_gray = args.is_gray
     early_stopping = args.early_stopping
     use_class_weights = args.class_weights
-    augmented = args.augmented
     tag = args.tag
-    use_mixup = args.mixup
 
     print(f"Experiment Configurations: {args.__dict__}")
 
@@ -438,7 +362,7 @@ if __name__ == '__main__':
         # Create TF datasets for training data
         train_ds_raw = tf.data.Dataset.from_tensor_slices((fold_train_paths, fold_train_labels))
         train_ds_raw = train_ds_raw.map(
-            get_preprocessor(image_size=x_y_size_images, train=True),
+            get_preprocessor(image_size=x_y_size_images),
             num_parallel_calls=tf.data.AUTOTUNE
         )
         train_ds = train_ds_raw.batch(batch_size, drop_remainder=True)
@@ -452,14 +376,6 @@ if __name__ == '__main__':
         )
         val_dataset = val_dataset.batch(batch_size)
         val_dataset = val_dataset.prefetch(tf.data.AUTOTUNE)
-
-        # Apply mixup if needed
-        if use_mixup:
-            train_ds_1 = train_ds.shuffle(buffer_size=len(fold_train_paths), reshuffle_each_iteration=True)
-            train_ds_2 = train_ds.shuffle(buffer_size=len(fold_train_paths), reshuffle_each_iteration=True)
-            train_ds_mu = tf.data.Dataset.zip((train_ds_1, train_ds_2))
-            train_ds = train_ds_mu.map(mix_up2, num_parallel_calls=tf.data.AUTOTUNE)
-            train_ds_raw = train_ds
 
         ###
         # class weights
