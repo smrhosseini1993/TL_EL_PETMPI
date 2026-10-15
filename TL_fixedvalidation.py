@@ -14,7 +14,7 @@ parser.add_argument(
     '--input_size',
     dest='input_size',
     help='Image size',
-    default=299,
+    default=128,
     type=int
 )
 parser.add_argument(
@@ -34,21 +34,21 @@ parser.add_argument(
     '--epochs',
     dest='epochs',
     help='Epochs count',
-    default=35,
+    default=30,
     type=int
 )
 parser.add_argument(
     '--partial_epochs',
     dest='partial_epochs',
     help='Partial fine tuning phase epochs count',
-    default=5,
+    default=30,
     type=int
 )
 parser.add_argument(
     '--partial_epochs_2',
     dest='partial_epochs_2',
     help='Partial fine tuning phase epochs count',
-    default=2,
+    default=30,
     type=int
 )
 parser.add_argument(
@@ -83,39 +83,11 @@ parser.add_argument(
     default="tag",
     type=str
 )
-parser.add_argument(
-    '--det',
-    dest='det',
-    help='Deterministic experiments?',
-    action='store_true'
-)
 args = parser.parse_args()
-det = args.det
 # endregion
-if det:
-    seed_number = 43
-    os.environ['PYTHONHASHSEED'] = str(seed_number)
-
-    import random
-
-    random.seed(seed_number)
-
-    import numpy as np
-
-    np.random.seed(seed_number)
-
-    import tensorflow as tf
-
-    tf.random.set_seed(seed_number)
-
-    from tensorflow import keras
-
-    tf.keras.utils.set_random_seed(seed_number)
-else:
-    import random
-    import numpy as np
-    import tensorflow as tf
-    from tensorflow import keras
+import numpy as np
+import tensorflow as tf
+from tensorflow import keras
 
 import datetime
 import glob
@@ -241,7 +213,7 @@ def get_optimizer(str_optimize_name):
         "RMSprop": tf.keras.optimizers.RMSprop,
         "Ftrl": tf.keras.optimizers.Ftrl,
     }
-    return optimizers[str_optimize_name](learning_rate=0.0003)
+    return optimizers[str_optimize_name](learning_rate=0.0001)
 
 
 def normalize_model_name(name):

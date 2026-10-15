@@ -16,7 +16,7 @@ do
     until [ $counter -gt 10 ]
     do
         echo $counter
-        python TL_crossvalidation.py --model_name $model --input_size 256 --batch_size 5 --epochs 100 --partial_epochs 100 --partial_epochs_2 100 --freeze_fe --early_stopping --optimizer Adam --class_weights --tag $counter
+        python TL_crossvalidation.py --model_name $model --input_size 256 --batch_size 5 --epochs 30 --partial_epochs 30 --partial_epochs_2 30 --freeze_fe --early_stopping --optimizer Adam --class_weights --tag $counter
         ((counter++))
     done
     echo "-------------------------------------------------------------------------------------"
