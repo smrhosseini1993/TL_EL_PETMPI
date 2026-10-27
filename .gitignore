@@ -1,0 +1,36 @@
+# Study data and participant-level files
+data/*
+!data/README.md
+*.xlsx
+*.xls
+*.csv
+*.tsv
+*.mat
+*.db
+*.sqlite
+*.h5
+*.hdf5
+*.keras
+*.ckpt
+*.weights.h5
+*.jpg
+*.jpeg
+*.png
+*.tif
+*.tiff
+
+# Generated outputs
+results/
+reports/
+log/
+analysis_outputs/
+figures/
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# Local and private working material
+private/
+archive/
+Experiment*/
+.DS_Store
